@@ -376,7 +376,16 @@ async function runLanSync(opts) {
       setStatus(`同期しました（変化なし・${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}）`);
     }
   } catch (e) {
-    if (!opts.silent) setStatus('パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）');
+    if (opts.silent) return;
+    // https:// のページ（例：GitHub Pages版）からhttp://のパソコンへ直接アクセスしようとすると、
+    // ブラウザのセキュリティ機能（混在コンテンツ・プライベートネットワークアクセス制限）でブロック
+    // されることが実際に確認された。この場合は「パソコンが見つからない」のではなく、そもそも
+    // ブラウザが通信自体を許可していないので、原因を区別して案内する
+    if (location.protocol === 'https:' && base.startsWith('http://')) {
+      setStatus('このアドレス（https://…）からは、暗号化なしのパソコンに直接アクセスできない仕様です。スマホでも同じパソコンのアドレス（http://192.168.x.x:8790）を開いてから同期してください。');
+    } else {
+      setStatus('パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）');
+    }
   }
 }
 (function initLanSyncUI() {

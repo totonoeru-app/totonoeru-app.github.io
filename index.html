@@ -181,7 +181,7 @@
 
     <div id="lanSyncBanner" class="card no-print" style="padding:10px 14px;">
       <b style="font-size:13px;">🔄 パソコンと同期（家のWi-Fi内だけ・クラウド不使用）</b>
-      <p class="note" style="margin:4px 0 8px;">パソコンのアドレス（例: http://192.168.0.16:8790）を一度入力しておくと、同じWi-Fiに繋がっている時だけ自動で記録を合体します。データはインターネットを経由しません。</p>
+      <p class="note" style="margin:4px 0 8px;">パソコンのアドレス（例: http://192.168.0.16:8790）を一度入力しておくと、同じWi-Fiに繋がっている時だけ自動で記録を合体します。データはインターネットを経由しません。<br>※ブラウザの安全機能の都合で、家にいる間はスマホでもこのパソコンのアドレス（外出先で使うgithub.ioのアドレスではなく）を開いてから使うと確実です。外出先ではいつも通りgithub.io版を使い、家に帰ってこのアドレスを開いたときにまとめて同期されます。</p>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <input type="text" id="lanSyncUrl" placeholder="http://192.168.0.16:8790" style="flex:1; min-width:200px; padding:8px 10px; font-size:13px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink);">
         <button type="button" id="lanSyncBtn" class="btn-sub">🔄 今すぐ同期</button>
