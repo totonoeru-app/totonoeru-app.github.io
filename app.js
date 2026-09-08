@@ -385,7 +385,8 @@ async function runLanSync(opts) {
   opts = opts || {};
   const statusEl = document.getElementById('lanSyncStatus');
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
-  const base = (LS.get('lanSyncUrl', '') || '').trim().replace(/\/+$/, '');
+  const urlInput = document.getElementById('lanSyncUrl');
+  const base = ((urlInput && urlInput.value) || '').trim().replace(/\/+$/, '');
   if (!base) {
     if (!opts.silent) setStatus('先にパソコンのアドレスを入力してください');
     return;
@@ -436,11 +437,10 @@ async function runLanSync(opts) {
   const input = document.getElementById('lanSyncUrl');
   const btn = document.getElementById('lanSyncBtn');
   if (!input || !btn) return;
-  input.value = LS.get('lanSyncUrl', '');
-  input.addEventListener('change', () => LS.set('lanSyncUrl', input.value.trim()));
+  // パソコンのアドレスは保存しない。ブラウザに残しておきたくないという要望のため、
+  // 開き直す（再読み込み・再起動する）たびに欄は空になり、毎回入力し直す必要がある。
+  // これに伴い、以前あった「保存済みアドレスがあれば起動時に静かに自動同期」も行わなくなった
   btn.addEventListener('click', () => runLanSync({ silent: false }));
-  // ページを開いた直後、パソコンが同じWi-Fi上にいれば静かに同期を試す（無ければ何も表示せず諦める）
-  if (LS.get('lanSyncUrl', '')) setTimeout(() => runLanSync({ silent: true }), 1500);
 })();
 
 // ============================================================
