@@ -314,9 +314,11 @@ main { padding: 12px; max-width: 480px; margin: 0 auto; }
 .medal {
   display: inline-flex; align-items: center; justify-content: center;
   width: 22px; height: 22px; border-radius: 50%;
-  /* 猫の絵文字（😼🙀）を乗せると彩度が近くて見えにくかったため、--accentより彩度を落とした
-     専用の淡いピンクにする（白い数字の視認性が落ちすぎない範囲で薄くしている） */
-  background: #e6cbd3; color: #fff; font-size: 12px; font-weight: 700;
+  /* 猫の絵文字（😼🙀）が塗りつぶしのピンクだと彩度が近くて見えにくかったため、
+     塗りは真っ白にして輪郭と数字だけを（「体質チェックをやってみる」等と同じ）
+     --accentのピンクにする。彩度・明るさを落とさず、はっきりした色のまま使う */
+  background: #fff; color: var(--accent); border: 1.5px solid var(--accent);
+  font-size: 12px; font-weight: 700; box-sizing: border-box;
 }
 .note { color: var(--ink-sub); font-size: 12px; margin: 8px 0 0; }
 
