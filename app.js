@@ -1130,13 +1130,55 @@ function resolveJmaArea(areaMaster, muniCd) {
   return { officeCode, class20Code, class10Code, areaName: class20.name };
 }
 
-// 「顕著な大雨に関する気象情報（線状降水帯）」には単独のJSON API が無いため、大雨危険警報・大雨特別警報の
-// 発表（公式な代替指標）に加えて、同じレスポンスに含まれるheadlineText（気象庁が発表する見出し文そのもの）に
-// 「顕著な大雨」「線状降水帯」という言葉が入っていないかも確認する。見出し文は気象庁が実際に発表した文章その
-// ものなので、危険警報級に達していない・警報区域の粒度がずれている、といった理由で他の判定が漏れた場合でも、
-// 見出しに含まれていれば確実に拾える
+// 大雨危険警報・大雨特別警報の発表（公式な代替指標）に加えて、同じレスポンスに含まれるheadlineText
+// （気象庁が発表する見出し文そのもの）に「顕著な大雨」「線状降水帯」という言葉が入っていないかも確認する。
+// 見出し文は気象庁が実際に発表した文章そのものなので、危険警報級に達していない・警報区域の粒度がずれている、
+// といった理由で他の判定が漏れた場合でも、見出しに含まれていれば確実に拾える
+// （「線状降水帯が発生しました」という発表そのものは、下のfetchLinearRainbandInfo()の専用フィードで
+// 確実に拾えるようになったが、こちらの見出し文チェックもフォールバックとして残す）
 function detectLinearRainbandFromHeadline(headlineText) {
   return /顕著な大雨|線状降水帯/.test(headlineText || '');
+}
+
+// 「線状降水帯が発生しました」「線状降水帯の発生が直前に予想されます」という気象庁の公式発表は、
+// ニュースでは見かけるのに気象庁サイトのどこで見られるのか分かりにくい（ユーザー自身が調べても
+// 見つけられなかった）。実際には単独のページやAPIがあるわけではなく、気象庁の統合地図ページの
+// 「気象情報」レイヤー（map.html#.../&elem=senjouinfo）が使っている、ありとあらゆる種類の気象情報
+// （高温・少雨・台風解説・記録的短時間大雨…）を時系列にまとめた1本のログの中に、infoTagが
+// 「線状降水帯直前」「線状降水帯発生」になっているものとして混ざって入っている
+// このログ全体で使われている「valid」は、この情報種別に関わらず一律「発表から1週間」を機械的に
+// 入れているだけで（実際に確認：線状降水帯直前予測でもreportDatetimeのちょうど7日後になっていた）、
+// 「まだ線状降水帯が続いている」ことを意味しない。直前予測は文字通り数時間先の話でしかなく、発生の
+// 発表も普通は数時間で収まるため、validではなく発表時刻からの経過時間で「今のもの」かどうかを判断する
+const LINEAR_RAINBAND_FRESH_MS = { chokuzen: 3 * 60 * 60 * 1000, hassei: 6 * 60 * 60 * 1000 };
+let jmaLinearRainbandCache = null;
+async function fetchLinearRainbandInfo(force) {
+  if (!force && jmaLinearRainbandCache && (Date.now() - jmaLinearRainbandCache.fetchedAt) < 10 * 60 * 1000) return jmaLinearRainbandCache.data;
+  let res;
+  try { res = await fetchWithRetry('https://www.jma.go.jp/bosai/information/data/r8/information.json'); }
+  catch (e) { const err = new Error('jma-linear-rainband-failed'); err.stage = 'linear-rainband-fetch'; throw err; }
+  const arr = await res.json();
+  const now = Date.now();
+  const active = arr
+    .map(entry => {
+      const tag = (entry.infoTag || []).find(t => t.condition && t.condition.includes('線状降水帯'));
+      if (!tag) return null;
+      const kind = tag.condition.includes('発生') ? 'hassei' : 'chokuzen'; // 発生 or 直前予測
+      const reportAt = new Date(entry.reportDatetime).getTime();
+      if (!reportAt || (now - reportAt) > LINEAR_RAINBAND_FRESH_MS[kind]) return null; // 発表からしばらく経ったものは除外
+      return {
+        kind,
+        officeCode: entry.areaCode,
+        areaNames: (entry.areaTag || []).map(a => a.name),
+        areaCodes: (entry.areaTag || []).map(a => a.code),
+        reportDatetime: entry.reportDatetime,
+        targetDatetime: entry.targetDatetime,
+      };
+    })
+    .filter(Boolean);
+  const data = { fetchedAt: now, active };
+  jmaLinearRainbandCache = { fetchedAt: now, data };
+  return data;
 }
 
 // 気象庁の地方ごとの個別JSON（旧: /bosai/warning/data/warning/{officeCode}.json）は、実際には
@@ -1205,7 +1247,10 @@ async function fetchOfficialAlerts(lat, lon) {
   const muniCd = await reverseGeocodeMuniCd(lat, lon);
   const resolved = resolveJmaArea(areaMaster, muniCd);
   if (!resolved) { const err = new Error('jma-area-resolve-failed'); err.stage = 'area-resolve'; throw err; }
-  const map = await loadJmaWarningMap();
+  const [map, rainbandInfo] = await Promise.all([
+    loadJmaWarningMap(),
+    fetchLinearRainbandInfo().catch(() => null), // 失敗しても見出し文の判定だけで続行する
+  ]);
   // 細かい区域（class20）にデータがあればそちらを優先し、無ければ大きい区域（class10）を使う
   let { infos, headlineText } = activeInfosForArea(map.stateByArea, resolved.class20Code);
   if (!infos.length) {
@@ -1221,12 +1266,21 @@ async function fetchOfficialAlerts(lat, lon) {
   const rain = topOf('rain');
   const storm = topOf('storm');
   const headlineHasRainband = detectLinearRainbandFromHeadline(headlineText);
+  // 「線状降水帯が発生しました／直前に予想されます」の公式発表そのもの（fetchLinearRainbandInfo）が
+  // この地域（府県単位 or 細分区域単位）に出ていれば、見出し文の推測より確実な情報として別途持たせる
+  const linearRainbandAnnounced = rainbandInfo
+    ? rainbandInfo.active
+        .filter(a => a.officeCode === resolved.officeCode || a.areaCodes.includes(resolved.class10Code))
+        .sort((a, b) => new Date(b.reportDatetime) - new Date(a.reportDatetime))[0] || null
+    : null;
   return {
     areaName: resolved.areaName,
     rainLevel: rain ? rain.level : 0, rainLabel: rain ? rain.label : null,
     stormLevel: storm ? storm.level : 0, stormLabel: storm ? storm.label : null,
-    // 大雨危険警報・大雨特別警報（代替指標）、または見出し文に「線状降水帯」「顕著な大雨」の記載があれば true
-    linearRainbandLikely: (!!rain && rain.level >= 3) || headlineHasRainband,
+    // 大雨危険警報・大雨特別警報（代替指標）、見出し文に「線状降水帯」「顕著な大雨」の記載、
+    // または公式発表そのものが出ていれば true
+    linearRainbandLikely: (!!rain && rain.level >= 3) || headlineHasRainband || !!linearRainbandAnnounced,
+    linearRainbandAnnounced, // 公式発表そのもの（あれば）。{ kind: 'hassei'|'chokuzen', areaNames, reportDatetime }
     headlineText: headlineText || null,
     allActive, // rain/storm以外も含む、現在発表中のすべての警報・注意報・特別警報（レベル降順）
     otherActive: allActive.filter(i => i.kind !== 'rain' && i.kind !== 'storm'),
@@ -1241,7 +1295,7 @@ async function fetchOfficialAlerts(lat, lon) {
 // （area.jsonのoffices[code].children、細分区域コードの配列）を集計するだけでよい
 // （以前は地方の数だけ個別リクエストしていたが、全国1ファイルの取得だけで済むようになった）
 const NATIONWIDE_ALERT_CACHE_TTL = 20 * 60 * 1000;
-function summarizeOfficeFromMap(officeCode, officeName, children, stateByArea) {
+function summarizeOfficeFromMap(officeCode, officeName, children, stateByArea, rainbandAnnounced) {
   const allInfos = [];
   let headlineText = null;
   (children || []).forEach(childCode => {
@@ -1252,8 +1306,8 @@ function summarizeOfficeFromMap(officeCode, officeName, children, stateByArea) {
   const byKind = {};
   allInfos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
   const top = Object.values(byKind).sort((a, b) => b.level - a.level);
-  const linearRainbandLikely = (byKind.rain && byKind.rain.level >= 3) || detectLinearRainbandFromHeadline(headlineText);
-  return { officeCode, officeName, top, linearRainbandLikely, headlineText };
+  const linearRainbandLikely = (byKind.rain && byKind.rain.level >= 3) || detectLinearRainbandFromHeadline(headlineText) || !!rainbandAnnounced;
+  return { officeCode, officeName, top, linearRainbandLikely, rainbandAnnounced, headlineText };
 }
 async function fetchNationwideAlerts(force) {
   if (!force) {
@@ -1261,9 +1315,18 @@ async function fetchNationwideAlerts(force) {
     if (cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < NATIONWIDE_ALERT_CACHE_TTL) return cached.data;
   }
   const areaMaster = await loadJmaAreaMaster();
-  const map = await loadJmaWarningMap(force);
+  const [map, rainbandInfo] = await Promise.all([
+    loadJmaWarningMap(force),
+    fetchLinearRainbandInfo(force).catch(() => null), // 失敗しても警報・注意報の集計だけで続行する
+  ]);
+  // 地方（office）ごとに、いちばん新しい「線状降水帯発生／直前予測」の発表を1件だけ紐付ける
+  const rainbandByOffice = new Map();
+  if (rainbandInfo) rainbandInfo.active.forEach(a => {
+    const prev = rainbandByOffice.get(a.officeCode);
+    if (!prev || new Date(a.reportDatetime) > new Date(prev.reportDatetime)) rainbandByOffice.set(a.officeCode, a);
+  });
   const results = Object.entries(areaMaster.offices)
-    .map(([code, o]) => summarizeOfficeFromMap(code, o.name, o.children, map.stateByArea));
+    .map(([code, o]) => summarizeOfficeFromMap(code, o.name, o.children, map.stateByArea, rainbandByOffice.get(code) || null));
   const maxLevel = r => Math.max(0, ...r.top.map(i => i.level));
   const notable = results
     .filter(r => maxLevel(r) >= 2 || r.linearRainbandLikely)
@@ -1286,7 +1349,11 @@ async function runNationwideAlertCheck(force) {
     const icon = lv => lv >= 4 ? htmlEmojiImg('1f534', '🔴') : lv >= 3 ? htmlEmojiImg('1f7e0', '🟠') : htmlEmojiImg('26a0', '⚠️');
     const lines = data.notable.map(r => {
       const top = r.top[0];
-      const rainbandNote = r.linearRainbandLikely ? '　線状降水帯が関係している可能性' : '';
+      const rainbandNote = r.rainbandAnnounced
+        ? `　${r.rainbandAnnounced.kind === 'hassei' ? '線状降水帯が発生' : '線状降水帯の発生が直前に予想'}（${escapeHtml(r.rainbandAnnounced.areaNames.join('・'))}）`
+        : (r.linearRainbandLikely ? '　線状降水帯が関係している可能性' : '');
+      // 警報級には達していないが、線状降水帯の発表だけが単独で出ている地方（top自体が空）もある
+      if (!top) return `${htmlEmojiImg('1f30a', '🌊')} <b>${escapeHtml(r.officeName)}</b>：${rainbandNote.trim()}`;
       return `${icon(top.level)} <b>${escapeHtml(r.officeName)}</b>：${escapeHtml(top.label)}${rainbandNote}`;
     });
     resultEl.innerHTML = lines.join('<br>') + `<br><span style="font-size:11px; color:var(--ink-sub);">${stamp}</span>`;
@@ -1399,10 +1466,17 @@ async function runWeatherAlertCheck() {
     // 気象庁が実際に発表している警報・注意報・特別警報（もっとも確実な情報源）。rain/stormだけでなく、
     // 雷注意報・強風注意報・波浪注意報・濃霧注意報など「発表中のものすべて」を拾う
     if (official) {
+      // 「線状降水帯が発生しました／直前に予想されます」の公式発表そのものがあれば、見出し文からの
+      // 推測（「可能性があります」）より確実な言い方で伝える
+      const rainbandNote = a => `${a.kind === 'hassei' ? '線状降水帯が発生しています' : '線状降水帯の発生が直前に予想されています'}（${escapeHtml(a.areaNames.join('・'))}）`;
       if (official.rainLevel >= 2) {
-        lines.push(`🌊 【気象庁発表】${escapeHtml(official.rainLabel)}（${escapeHtml(official.areaName)}）${official.linearRainbandLikely ? '　線状降水帯が関係している可能性があります' : ''}`);
+        const note = official.linearRainbandAnnounced ? `　${rainbandNote(official.linearRainbandAnnounced)}`
+          : (official.linearRainbandLikely ? '　線状降水帯が関係している可能性があります' : '');
+        lines.push(`🌊 【気象庁発表】${escapeHtml(official.rainLabel)}（${escapeHtml(official.areaName)}）${note}`);
       } else if (official.rainLevel === 1) {
         lines.push(`⚠️ 【気象庁発表】${escapeHtml(official.rainLabel)}（${escapeHtml(official.areaName)}）`);
+      } else if (official.linearRainbandAnnounced) {
+        lines.push(`🌊 【気象庁発表】${rainbandNote(official.linearRainbandAnnounced)}`);
       } else if (official.linearRainbandLikely) {
         // 大雨警報級には達していなくても、見出し文に「顕著な大雨」「線状降水帯」の記載がある場合はそのまま伝える
         lines.push(`🌊 【気象庁発表】線状降水帯に関する情報が発表されています（${escapeHtml(official.areaName)}）`);
