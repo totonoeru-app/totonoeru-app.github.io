@@ -998,7 +998,8 @@ async function fetchOfficialAlerts(lat, lon) {
       }
     });
   });
-  const infos = codes.map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean);
+  // 土砂災害は気圧・天候と体調の関連というこのサイトの主旨から外れるため、そもそも集計に含めない
+  const infos = codes.map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean).filter(i => i.kind !== 'landslide');
   // 種類（kind）ごとに、いちばんレベルの高いものだけを残す（同じ種類の警報・特別警報が両方codesに出ることがあるため）
   const byKind = {};
   infos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
@@ -1036,7 +1037,8 @@ async function fetchOfficeWarningSummary(officeCode, officeName) {
   (j.areaTypes || []).forEach(t => (t.areas || []).forEach(a => (a.warnings || []).forEach(w => {
     if (w.code && w.status !== '解除') activeCodes.add(w.code);
   })));
-  const infos = [...activeCodes].map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean);
+  // 土砂災害は体調との関連というこのサイトの主旨から外れるため、全国一覧でも除外する
+  const infos = [...activeCodes].map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean).filter(i => i.kind !== 'landslide');
   const byKind = {};
   infos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
   const top = Object.values(byKind).sort((a, b) => b.level - a.level);
