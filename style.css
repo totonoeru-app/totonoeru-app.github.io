@@ -415,7 +415,9 @@ footer {
 .diag-scores { margin-top:12px; }
 .diag-bar { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:12px; }
 .diag-bar-label { width:90px; flex:none; }
-.diag-bar-track { flex:1; background:var(--border); height:14px; border-radius:7px; overflow:hidden; }
+/* 塗り(--accent-soft/--warm)の彩度が低く、土台(旧:var(--border))との色の差がわかりにくかったため、
+   土台側をメインのピンク(--accent)にして、塗りが薄いピンクの帯として重なって見えるようにする */
+.diag-bar-track { flex:1; background:var(--accent); height:14px; border-radius:7px; overflow:hidden; }
 .diag-bar-fill { background:var(--accent-soft); height:100%; transform-origin:left; animation:growIn .7s cubic-bezier(.22,.8,.28,1) both; }
 .diag-bar.top .diag-bar-fill { background:var(--warm); }
 @keyframes growIn { from { transform:scaleX(0); } to { transform:scaleX(1); } }

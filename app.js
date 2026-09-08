@@ -1021,6 +1021,74 @@ async function fetchOfficialAlerts(lat, lon) {
   };
 }
 
+// ---------- 全国の警報・注意報一覧 ----------
+// 現在地だけでなく日本全国の状況もまとめて見たい、という要望から追加。気象庁は「全国まとめ」の
+// 単独APIを公開していないため、area.jsonにある全地方（office、58件）ぶんの警報・注意報JSONを
+// 1つずつ取得して集計する。頻繁に叩くものではないため、結果を20分キャッシュする
+const NATIONWIDE_ALERT_CACHE_TTL = 20 * 60 * 1000;
+async function fetchOfficeWarningSummary(officeCode, officeName) {
+  let j;
+  try {
+    const res = await fetchWithRetry(`https://www.jma.go.jp/bosai/warning/data/warning/${officeCode}.json`, { retries: 0 });
+    j = await res.json();
+  } catch { return null; }
+  const activeCodes = new Set();
+  (j.areaTypes || []).forEach(t => (t.areas || []).forEach(a => (a.warnings || []).forEach(w => {
+    if (w.code && w.status !== '解除') activeCodes.add(w.code);
+  })));
+  const infos = [...activeCodes].map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean);
+  const byKind = {};
+  infos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
+  const top = Object.values(byKind).sort((a, b) => b.level - a.level);
+  const linearRainbandLikely = (byKind.rain && byKind.rain.level >= 3) || detectLinearRainbandFromHeadline(j.headlineText);
+  return { officeCode, officeName, top, linearRainbandLikely, headlineText: j.headlineText || null };
+}
+async function fetchNationwideAlerts(force) {
+  if (!force) {
+    const cached = LS.get('nationwideAlertCache', null);
+    if (cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < NATIONWIDE_ALERT_CACHE_TTL) return cached.data;
+  }
+  const areaMaster = await loadJmaAreaMaster();
+  const offices = Object.entries(areaMaster.offices).map(([code, o]) => ({ code, name: o.name }));
+  // 気象庁サイトへ一度に大量アクセスしないよう、少しずつバッチに分けて取得する
+  const results = [];
+  const BATCH = 10;
+  for (let i = 0; i < offices.length; i += BATCH) {
+    const batch = offices.slice(i, i + BATCH);
+    const settled = await Promise.all(batch.map(o => fetchOfficeWarningSummary(o.code, o.name)));
+    results.push(...settled.filter(Boolean));
+  }
+  const maxLevel = r => Math.max(0, ...r.top.map(i => i.level));
+  const notable = results
+    .filter(r => maxLevel(r) >= 2 || r.linearRainbandLikely)
+    .sort((a, b) => maxLevel(b) - maxLevel(a));
+  const data = { fetchedAt: Date.now(), notable, totalChecked: results.length };
+  try { LS.set('nationwideAlertCache', { fetchedAt: data.fetchedAt, data }); } catch { /* 保存容量超過などは無視 */ }
+  return data;
+}
+async function runNationwideAlertCheck(force) {
+  const resultEl = document.getElementById('nationwideAlertResult');
+  if (!resultEl) return;
+  resultEl.textContent = '全国の警報・注意報を確認中…（少し時間がかかります）';
+  try {
+    const data = await fetchNationwideAlerts(force);
+    const stamp = `${new Date(data.fetchedAt).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}時点・全国${data.totalChecked}地方より`;
+    if (!data.notable.length) {
+      resultEl.textContent = `✅ 現在、警報級以上の発表がある地方はありません（${stamp}）`;
+      return;
+    }
+    const icon = lv => lv >= 4 ? '🔴' : lv >= 3 ? '🟠' : '⚠️';
+    const lines = data.notable.map(r => {
+      const top = r.top[0];
+      const rainbandNote = r.linearRainbandLikely ? '　線状降水帯が関係している可能性' : '';
+      return `${icon(top.level)} <b>${escapeHtml(r.officeName)}</b>：${escapeHtml(top.label)}${rainbandNote}`;
+    });
+    resultEl.innerHTML = lines.join('<br>') + `<br><span style="font-size:11px; color:var(--ink-sub);">${stamp}</span>`;
+  } catch {
+    resultEl.textContent = '⚠️ 全国の警報・注意報を確認できませんでした。もう一度お試しください。';
+  }
+}
+
 async function collectWeather(statusEl, dateKey, timeStr) {
   try {
     if (statusEl) statusEl.textContent = '位置情報を取得中…';
@@ -1208,6 +1276,8 @@ document.getElementById('weatherAlertCheckBtn').addEventListener('click', () => 
   weatherAlertChecked = true;
   runWeatherAlertCheck();
 });
+const nationwideAlertBtn = document.getElementById('nationwideAlertCheckBtn');
+if (nationwideAlertBtn) nationwideAlertBtn.addEventListener('click', () => runNationwideAlertCheck(true));
 
 function moodEmoji(m) {
   return { 1: '😿', 2: '🐱', 3: '😽' }[m] || '';
