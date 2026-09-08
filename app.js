@@ -315,9 +315,13 @@ function mergeBackupData(local, incoming) {
     const byId = new Map();
     b.forEach(item => { if (item && item.id != null) byId.set(item.id, item); });
     a.forEach(item => { if (item && item.id != null) byId.set(item.id, item); }); // localで上書き＝local優先
-    // idを持たない要素（念のため）はそのまま両方残す
-    const noId = [...a, ...b].filter(item => !item || item.id == null);
-    merged[key] = [...byId.values(), ...noId];
+    // idを持たない要素（念のため）は、内容が完全一致するものが増え続けないようJSON文字列で重複を除く
+    // （これをしないと、GET→合体→POSTを繰り返すたびに際限なく増殖してしまう不具合が実際に起きた：
+    // 同期のたびにデータが2倍近くに膨れ上がり、数十MBになってスマホがダウンロードしきれず
+    // 毎回タイムアウトしていた）
+    const noIdMap = new Map();
+    [...a, ...b].filter(item => !item || item.id == null).forEach(item => noIdMap.set(JSON.stringify(item), item));
+    merged[key] = [...byId.values(), ...noIdMap.values()];
   });
   // 日付文字列だけの配列（がんばったポイントの記録日など）は重複を除いた集合として合体する
   const dateArrayKeys = ['ganbattaRecordDates', 'ganbattaDekitaDates', 'ganbattaForecastBetterDates'];
@@ -383,8 +387,14 @@ async function runLanSync(opts) {
     LS.set('lanSyncLastAt', Date.now());
     if (changed) {
       applyBackupData(merged);
-      setStatus('同期して新しい記録を取り込みました。ページを再読み込みします。');
-      setTimeout(() => location.reload(), 600);
+      // ページ読み込み時の自動（silent）同期でここまで来るたびに毎回reloadすると、
+      // 「読み込み→自動同期→reload→読み込み→自動同期→reload…」の無限ループになりかねない
+      // （実際にサーバー上のデータが読み込むたびに膨れ上がる不具合として確認された）。
+      // 手動で「今すぐ同期」を押したときだけ再読み込みし、自動同期は静かに反映するだけにする
+      if (!opts.silent) {
+        setStatus('同期して新しい記録を取り込みました。ページを再読み込みします。');
+        setTimeout(() => location.reload(), 600);
+      }
     } else {
       setStatus(`同期しました（変化なし・${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}）`);
     }
