@@ -337,8 +337,16 @@ function mergeBackupData(local, incoming) {
     const b = (incoming[key] && typeof incoming[key] === 'object') ? incoming[key] : {};
     merged[key] = { ...b, ...a };
   });
-  // その他（体質チェック・問診・伝える文章・がんばったポイント数など「今の状態」に近いもの）は
+  // その他（体質チェック・問診・伝える文章など「今の状態」に近いもの）は
   // 単純にlocal優先のままにする（mergedの初期値が{...local}なので、何もしなければlocalが残る）
+  // ただし「がんばったねポイント」の合計数だけは例外: これは本来ganbattaPointsLogの
+  // delta合計であるはずなのに、合計値自体は上のidArrayKeysの対象外なのでlocal側の値が
+  // そのまま残ってしまい、他端末で貯めた分がログには合体されても合計には反映されない
+  // （実際に「アルバムは39件になったのにポイントは0のまま」という形で確認された）。
+  // ログを合体し終えた後の値から合計を作り直すことで、この食い違いを防ぐ
+  if (Array.isArray(merged.ganbattaPointsLog)) {
+    merged.ganbattaPoints = merged.ganbattaPointsLog.reduce((sum, item) => sum + (Number(item && item.delta) || 0), 0);
+  }
   return merged;
 }
 // 実機のスマホから試したところ3秒では間に合わないことがあったため、他のAPI呼び出しと同じ8秒にし、
@@ -367,7 +375,7 @@ async function runLanSync(opts) {
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
   const base = (LS.get('lanSyncUrl', '') || '').trim().replace(/\/+$/, '');
   if (!base) {
-    if (!opts.silent) setStatus('先にパソコンのアドレスを入力してください（例: http://192.168.0.16:8790）');
+    if (!opts.silent) setStatus('先にパソコンのアドレスを入力してください');
     return;
   }
   if (!opts.silent) setStatus('同期中…');
@@ -405,7 +413,7 @@ async function runLanSync(opts) {
     // されることが実際に確認された。この場合は「パソコンが見つからない」のではなく、そもそも
     // ブラウザが通信自体を許可していないので、原因を区別して案内する
     if (location.protocol === 'https:' && base.startsWith('http://')) {
-      setStatus('このアドレス（https://…）からは、暗号化なしのパソコンに直接アクセスできない仕様です。スマホでも同じパソコンのアドレス（http://192.168.x.x:8790）を開いてから同期してください。');
+      setStatus('このアドレス（https://…）からは、暗号化なしのパソコンに直接アクセスできない仕様です。スマホでも同じパソコンのアドレスを開いてから同期してください。');
     } else {
       const detail = (e && e.name) ? `（詳細: ${e.name}${e.message ? ' - ' + e.message : ''}）` : '';
       setStatus(`パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）${detail}`);
@@ -4380,17 +4388,7 @@ async function renderWeatherTab() {
     }
   } catch (e) {
     const denied = e && e.code === 1;
-    // http://の非localhostアドレス（LANのIPアドレスでスマホから開いた場合など）では、ブラウザが
-    // 位置情報機能そのものを無効化しており、許可ダイアログすら出せない。この場合はcode===1
-    // (PERMISSION_DENIED)にはなるが「設定を確認してください」という案内が的外れ（そもそも
-    // 設定項目が存在しない）になるため、原因を区別して案内する
-    const insecureOrigin = !window.isSecureContext;
-    let deniedMsg;
-    if (insecureOrigin) {
-      deniedMsg = 'このアドレス（http://…、暗号化なし）では、スマホのブラウザが位置情報の利用を許可できない仕様になっています。設定を見直しても解決しません。天気なしでも、下の気分の記録は残せます。';
-    } else {
-      deniedMsg = '位置情報の利用が許可されていないようです。ブラウザの設定を確認してから、もう一度お試しください。天気なしでも、下の気分の記録は残せます。';
-    }
+    const deniedMsg = '天気情報を読み込めませんでした。天気なしでも、下の気分の記録は残せます。';
     // 位置情報を拒否／天気の取得に失敗した場合でも、サイトの目的説明とワンタップ記録は行き止まりにせず出す
     // （これらは天気が取れるかどうかとは無関係に、初めての人へいちばん最初に伝えたい内容のため）
     root.innerHTML = `
