@@ -1,0 +1,582 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#2d5a4a" />
+<title>トトノエ～ル</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <button id="themeToggle" class="theme-toggle no-print" aria-label="夜モード切り替え">🌙</button>
+  <button id="energySaveToggle" class="theme-toggle no-print" aria-label="省エネモード切り替え" title="省エネモード：今日は少なめでいく">🔋</button>
+  <button id="sosModeToggle" class="theme-toggle no-print" aria-label="しんどいときモード" title="しんどいときモード：今日はこれだけでいい">🆘</button>
+  <h1>トトノエ～ル🎉</h1>
+  <nav class="tabs">
+    <button class="tab active" data-tab="weather">🔮 天気</button>
+    <button class="tab" data-tab="record">記録</button>
+    <button class="tab" data-tab="album">🌷 できたことアルバム</button>
+    <button class="tab" data-tab="kaeshi">ことばのおまもり</button>
+    <button class="tab" data-tab="intake">問診</button>
+    <button class="tab" data-tab="check">体質チェック</button>
+    <button class="tab" data-tab="dict">症状辞典</button>
+    <button class="tab" data-tab="ref">体質一覧</button>
+    <button class="tab" data-tab="column">コラム</button>
+    <button class="tab" data-tab="care">セルフケア</button>
+    <button class="tab" data-tab="pomodoro">🍅 タイマー</button>
+    <button class="tab" data-tab="myguide">📋 取扱説明書</button>
+    <button class="tab" data-tab="tsutaeru">伝える</button>
+    <button class="tab" data-tab="exprdict">表現辞典</button>
+    <button class="tab" data-tab="history">経過・通院</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 天気：起動して最初に見える、その日・週間の天気予報 -->
+  <section id="tab-weather" class="tab-panel active">
+    <div id="weatherTabContent"></div>
+  </section>
+
+  <!-- 問診 -->
+  <section id="tab-intake" class="tab-panel">
+    <div class="toolbar toolbar-sticky">
+      <button id="resetIntake" class="btn-sub">クリア</button>
+      <button id="toggleQuickMode" class="btn-sub">簡単モードにする</button>
+      <span class="hint">タップで記入 → 末尾に気づいたことが出ます</span>
+    </div>
+    <div id="intakeList"></div>
+    <div id="intakeResult" class="result-card" hidden></div>
+    <button id="intakeResultJump" class="result-jump no-print" hidden>💌 気づいたことを見る</button>
+  </section>
+
+  <!-- 体質チェック -->
+  <section id="tab-check" class="tab-panel">
+    <div class="toolbar toolbar-sticky">
+      <button id="resetCheck" class="btn-sub">クリア</button>
+      <span class="hint">気になる項目をタップ → 下に近いかもしれない体質が出ます</span>
+    </div>
+    <div id="checkList"></div>
+    <div id="checkResult" class="result-card" hidden></div>
+    <button id="checkResultJump" class="result-jump no-print" hidden>💌 近いかもしれない体質を見る</button>
+  </section>
+
+  <!-- 症状辞典（逆引き含む） -->
+  <section id="tab-dict" class="tab-panel">
+    <div class="toolbar">
+      <input id="dictSearch" type="search" placeholder="症状で検索（例：頭痛・むくみ・不眠）" />
+    </div>
+    <div id="dictReverse"></div>
+    <div id="dictList"></div>
+  </section>
+
+  <!-- セルフケア -->
+  <section id="tab-care" class="tab-panel">
+    <div class="toolbar">
+      <input id="careSearch" type="search" placeholder="タイプ・症状で検索（例：不眠・冷え）" />
+    </div>
+    <div class="seg" id="careSeg">
+      <button class="seg-btn active" data-seg="taishitsu">体質別（10）</button>
+      <button class="seg-btn" data-seg="type">タイプ別（10）</button>
+      <button class="seg-btn" data-seg="scene">シーン別</button>
+     
+    </div>
+    <div id="careList"></div>
+  </section>
+
+  <!-- タイマー：時間を管理するだけでなく、今日の体調に合わせて「できる量」を無理なく区切るためのタイマー -->
+  <section id="tab-pomodoro" class="tab-panel">
+    <div class="toolbar">
+      <span class="hint">今日の体調に合わせて、無理なく作業を区切るタイマーです。途中でやめても失敗ではありません</span>
+    </div>
+
+    <div class="card no-print" id="pomoConditionCard" style="padding:14px 16px;"></div>
+
+    <div class="card" style="padding:20px 16px; text-align:center;">
+      <div id="pomoTimerView">
+        <p class="note" id="pomoThemeLabel" style="margin:0 0 2px; font-weight:600; font-size:14px;"></p>
+        <p class="note" id="pomoPhaseLabel" style="margin:0 0 4px;"></p>
+        <div id="pomoRingWrap" style="position:relative; width:200px; height:200px; margin:6px auto;">
+          <svg viewBox="0 0 200 200" style="width:200px; height:200px; transform:rotate(-90deg);">
+            <circle cx="100" cy="100" r="86" fill="none" stroke="var(--accent-soft)" stroke-width="14" />
+            <circle id="pomoRingFill" cx="100" cy="100" r="86" fill="none" stroke="var(--accent)" stroke-width="14" stroke-linecap="round" />
+          </svg>
+          <div style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <span id="pomoTimeText" style="font-size:34px; font-weight:700; font-variant-numeric:tabular-nums;">25:00</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; justify-content:center; margin-top:10px;">
+          <button type="button" class="btn-out" id="pomoStartPause">開始</button>
+          <button type="button" class="btn-sub" id="pomoReset">リセット</button>
+          <button type="button" class="btn-sub" id="pomoSkip">次へ</button>
+        </div>
+      </div>
+      <div id="pomoEndDayView" hidden></div>
+    </div>
+
+    <div class="card" id="pomoNextThemeCard" style="padding:12px 16px;"></div>
+    <div class="card no-print" id="pomoBreakTipCard" style="padding:12px 16px;" hidden></div>
+    <div class="card" id="pomoTodayLogCard" style="padding:14px 16px;"></div>
+
+    <button type="button" class="btn-sub no-print" id="pomoEndDayBtn" style="width:100%; margin-bottom:10px;">🌙 今日の作業を終了</button>
+
+    <details class="card">
+      <summary><b>⚙️ 設定</b></summary>
+      <div style="margin:0 16px 14px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin:10px 0 8px;">時間の目安</label>
+        <div class="chips" id="pomoPresetChips"></div>
+        <div id="pomoCustomTimeFields" style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;"></div>
+        <p class="note" id="pomoPresetNote" style="margin-top:8px;"></p>
+
+        <label style="display:block; font-weight:600; font-size:13px; margin:18px 0 8px;">🔁 今日のテーマ（登録テーマから選ぶ・複数可）</label>
+        <p class="note" style="margin:0 0 8px;">選んだテーマだけを、集中タイムのたびに順番に回します。今日はやらないテーマは外しておけます。</p>
+        <div class="chips" id="pomoTodayThemePicker"></div>
+
+        <label style="display:block; font-weight:600; font-size:13px; margin:18px 0 8px;">📋 登録テーマ</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <input type="text" id="pomoThemeNameInput" placeholder="例：英語・単語帳" style="flex:1; min-width:140px; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+          <select id="pomoThemeWeightInput" style="padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;">
+            <option value="light">🟢 軽い</option>
+            <option value="normal" selected>🟡 普通</option>
+            <option value="heavy">🔴 重い</option>
+          </select>
+          <button type="button" class="btn-sub" id="pomoThemeAddBtn">追加</button>
+        </div>
+        <div id="pomoThemeList" style="margin-top:10px;"></div>
+
+        <label style="display:block; font-weight:600; font-size:13px; margin:18px 0 8px;">🔔 音・通知</label>
+        <label class="chip" id="pomoChimeToggle" style="margin-right:6px;">🔔 チャイム</label>
+        <label class="chip" id="pomoNotifyToggle">📩 ブラウザ通知</label>
+      </div>
+    </details>
+  </section>
+
+  <!-- 体質一覧 -->
+  <section id="tab-ref" class="tab-panel">
+    <div class="toolbar">
+      <input id="refSearch" type="search" placeholder="体質名で検索（例：気虚）" />
+    </div>
+    <div id="refList"></div>
+  </section>
+
+  <!-- コラム -->
+  <section id="tab-column" class="tab-panel">
+    <div class="toolbar">
+      <input id="columnSearch" type="search" placeholder="キーワードで検索（例：気滞）" />
+    </div>
+    <div id="columnList"></div>
+  </section>
+
+  <!-- 記録カレンダー -->
+  <section id="tab-record" class="tab-panel">
+    <div class="toolbar">
+      <button id="openRecordForm" class="btn-sub">＋記録を追加</button>
+      <button id="exportBackup" class="btn-sub no-print">📥 バックアップ</button>
+      <label class="btn-sub no-print" style="cursor:pointer; margin:0;">📤 復元<input type="file" id="importBackup" accept="application/json" hidden></label>
+      <span class="hint">体質チェック・問診の履歴・メモ・その時の天気を残せます</span>
+    </div>
+
+    <div id="weatherAlertBanner" class="card" style="padding:10px 14px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <b style="font-size:13px;">🌏 台風・線状降水帯・大雨の自動チェック</b>
+        <button type="button" id="weatherAlertCheckBtn" class="btn-sub no-print" style="padding:6px 10px; font-size:12px;">🔍 今すぐチェック</button>
+      </div>
+      <p class="note" id="weatherAlertResult" style="margin:6px 0 0;">サイトを開いたとき・記録タブを開いたときに自動でチェックします（位置情報の許可が必要です。ボタンでも確認できます）</p>
+    </div>
+    <div id="weeklySummary" class="card" style="padding:10px 14px;" hidden></div>
+
+    <div id="recordForm" class="card" hidden>
+      <div class="q" style="margin:0 16px 12px; padding-top:14px;">
+        <label>いつの記録?</label>
+        <div style="display:flex; gap:8px;">
+          <input type="date" id="recordDate" style="flex:1; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+          <input type="time" id="recordTime" style="flex:1; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+        </div>
+        <span class="hint">過去の日時にすると、その時点の天気を記録できます</span>
+      </div>
+      <div class="q" style="margin:0 16px 12px;">
+        <label>今の体調は?</label>
+        <div class="mood-picker" id="moodPicker">
+          <button type="button" class="mood-btn" data-mood="1">😿<span>つらい</span></button>
+          <button type="button" class="mood-btn" data-mood="2">🐱<span>ふつう</span></button>
+          <button type="button" class="mood-btn" data-mood="3">😽<span>元気</span></button>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+          <label class="chip no-print" id="recordPeriodToggle" style="font-size:12px; padding:4px 10px; opacity:.75;">この日は生理</label>
+          <label class="chip no-print" id="recordHospitalToggle" style="font-size:12px; padding:4px 10px; opacity:.75;">🏥 この日は通院</label>
+        </div>
+      </div>
+      <div class="q" style="margin:0 16px 12px;">
+        <label>一言メモ</label>
+        <div style="position:relative;">
+          <textarea id="recordMemo" rows="3" placeholder="今日の体調や気づいたことを書く" style="width:100%; padding:10px; padding-right:46px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+          <button type="button" id="recordMemoMic" class="btn-sub no-print" style="position:absolute; right:6px; bottom:6px; padding:6px 8px; line-height:1;" title="音声入力">🎙️</button>
+        </div>
+      </div>
+      <div class="q" style="margin:0 16px 12px; display:flex; flex-wrap:wrap; gap:8px;">
+        <label class="chip" id="includeCheckLabel" style="display:inline-flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="includeCheck" />今の体質チェック結果を含める
+        </label>
+        <label class="chip" id="includeIntakeLabel" style="display:inline-flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="includeIntake" />今の問診結果を含める
+        </label>
+      </div>
+      <details class="q" style="margin:0 16px 12px;">
+        <summary class="hint" style="cursor:pointer;">✏️ 言葉から文章を作って伝える（開く）</summary>
+        <div style="margin-top:10px;">
+          <div class="q" style="margin:0 0 8px;"><label>いつから?</label><div class="chips" id="rfWhen"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>どのくらい?</label><div class="chips" id="rfDegree"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>つらさを数字で（0〜10・任意）</label><div class="chips" id="rfNrs"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>どこが?</label><div class="chips" id="rfPlace"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>どんな感じ?</label><div class="chips" id="rfFeel"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>気持ちの面は?</label><div class="chips" id="rfMind"></div></div>
+          <div class="q" style="margin:0 0 8px;"><label>体の状態・生活面は?</label><div class="chips" id="rfBody"></div></div>
+          <button type="button" id="rfInsert" class="btn-sub">この文章をメモに入れる</button>
+        </div>
+      </details>
+      <details class="q" style="margin:0 16px 12px;">
+        <summary class="hint" style="cursor:pointer;">🧩 なぜ今つらい？　要因を整理する（開く）</summary>
+        <div style="margin-top:10px;">
+          <p class="note" style="margin:0 0 8px;">原因を1つに決めるのではなく、可能性を整理するためのチェックです。当てはまりそうなものを選んでください（複数可）</p>
+          <div class="chips" id="factorChecklist"></div>
+          <button type="button" id="factorInsert" class="btn-sub" style="margin-top:10px;">この内容から一言を作ってメモに入れる</button>
+        </div>
+      </details>
+      <div class="q" style="margin:0 16px 12px;">
+        <span id="weatherStatus" class="hint">位置情報を許可すると、その時の天気も一緒に記録されます</span>
+      </div>
+      <div class="q" style="margin:0 16px 14px; display:flex; gap:8px;">
+        <button id="saveRecord" class="btn-out" style="flex:1;">保存</button>
+        <button id="cancelRecord" class="btn-sub" style="flex:0 0 auto;">キャンセル</button>
+      </div>
+    </div>
+
+    <div class="seg" id="recordSeg">
+      <button class="seg-btn active" data-seg="calendar">カレンダー</button>
+      <button class="seg-btn" data-seg="analysis">分析</button>
+    </div>
+
+    <div id="calendarView">
+      <div id="moodTrendCard" class="card" style="padding:12px 10px 8px;" hidden></div>
+      <div id="calendarGrid" class="card"></div>
+      <div id="dayEntries"></div>
+
+      <div class="card no-print" id="handoverCard" style="padding:14px 16px; margin-top:10px;"></div>
+
+      <div class="card no-print" id="printConfigCard" style="padding:14px 16px; margin-top:10px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">🖨 記録をまとめて印刷する</label>
+        <p class="note" style="margin:0 0 10px;">診察や相談の際に、まとまった記録として渡せます。記録の概要・よく出る症状・体質チェック傾向・気象条件との関連・イベント比較まで含めた詳しい内容になります。</p>
+        <div class="q" style="margin:0 0 10px;">
+          <label>期間</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="date" id="printFromDate" style="flex:1; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+            <span class="note" style="margin:0;">〜</span>
+            <input type="date" id="printToDate" style="flex:1; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+          </div>
+        </div>
+        <div class="q" style="margin:0 0 10px;">
+          <label>間隔（記録が多い期間を間引いて印刷したいとき）</label>
+          <select id="printInterval" style="width:100%; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;">
+            <option value="1">毎日（間引かない）</option>
+            <option value="2">2日おき</option>
+            <option value="3">3日おき</option>
+            <option value="7">1週間おき</option>
+            <option value="14">2週間おき</option>
+          </select>
+        </div>
+        <div class="q" style="margin:0 0 10px;">
+          <label>間引いても必ず入れたい日（任意）</label>
+          <div style="display:flex; gap:6px;">
+            <input type="date" id="printExtraDateInput" style="flex:1; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+            <button type="button" id="printExtraDateAdd" class="btn-sub">追加</button>
+          </div>
+          <div class="chips" id="printExtraDateList" style="margin-top:8px;"></div>
+        </div>
+        <button type="button" id="printAllRecordsBtn" class="btn-sub">🖨 この条件で印刷する</button>
+        <p class="note" id="printConfigSummary" style="margin:8px 0 0;"></p>
+      </div>
+      <div id="recordJournalPrintView" class="print-only"></div>
+    </div>
+
+    <div id="analysisView" hidden></div>
+  </section>
+
+  <!-- アルバム：できたよ！アルバム／がんばったねポイント -->
+  <section id="tab-album" class="tab-panel">
+    <div id="albumTabContent"></div>
+  </section>
+
+  <!-- 私の取扱説明書：分析タブの相関計算を、専門用語なしでまとめて見せる専用ページ -->
+  <section id="tab-myguide" class="tab-panel">
+    <div id="myGuideTabContent"></div>
+  </section>
+
+  <!-- 伝える（テンプレート式 文章生成） -->
+  <section id="tab-tsutaeru" class="tab-panel">
+    <div class="toolbar">
+      <button id="resetTsutaeru" class="btn-sub">クリア</button>
+      <span class="hint">気になる言葉を選ぶと、他の人に伝えやすい文章を自動で作ります</span>
+    </div>
+
+    <div class="card no-print" id="tsutaeruVoiceCard" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;">🎙️ 声でそのまま伝える</label>
+      <p class="note" style="margin:0 0 10px;">気力がない時は、タップして話すだけでOKです。言葉を整理しなくても、だらだら話した中から気になる言葉を自動で拾って下のチェック欄に反映します。元の音声はそのまま残るので、あとから安心して見返せます。</p>
+      <button type="button" id="tsutaeruMicBtn" class="btn-sub no-print">🎙️ 話しはじめる</button>
+      <p class="note" id="tsutaeruMicStatus" style="margin:8px 0 0;"></p>
+      <div id="tsutaeruVoiceResult" hidden style="margin-top:10px;">
+        <label style="display:block; font-weight:600; font-size:12px; margin-bottom:4px;">元の音声（そのまま・書き換えません）</label>
+        <textarea id="tsutaeruRawVoice" rows="3" readonly style="width:100%; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit; background:var(--surface-2); color:var(--ink-sub);"></textarea>
+        <label style="display:block; font-weight:600; font-size:12px; margin:10px 0 4px;">読みやすく区切った文章（間で区切り・マイ辞書を適用・自由に編集できます）</label>
+        <textarea id="tsutaeruCleanedVoice" rows="3" style="width:100%; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+        <p class="note" id="tsutaeruVoiceDiff" style="margin:6px 0 0;"></p>
+        <div class="output-bar no-print" style="margin-top:8px;">
+          <button class="btn-out" id="tsutaeruApplyVoiceTags">✅ この内容から言葉を反映する</button>
+          <button class="btn-out" id="tsutaeruUseCleanedText">📋 整えた文章をそのまま使う</button>
+        </div>
+      </div>
+      <details style="margin-top:10px;">
+        <summary class="hint" style="cursor:pointer;">🔤 聞き取りまちがいのマイ辞書（開く）</summary>
+        <div style="margin-top:8px;">
+          <p class="note" style="margin:0 0 8px;">よく間違って認識される言葉を登録しておくと、次から自動で直ります。</p>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <input type="text" id="voiceDictFrom" placeholder="間違って認識された言葉" style="flex:1; min-width:120px; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+            <input type="text" id="voiceDictTo" placeholder="正しい言葉" style="flex:1; min-width:120px; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+            <button type="button" id="voiceDictAdd" class="btn-sub">登録</button>
+          </div>
+          <ul id="voiceDictList" style="margin:10px 0 0; padding-left:0; list-style:none;"></ul>
+        </div>
+      </details>
+    </div>
+
+    <div class="card no-print" id="tsutaeruPresetsCard" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">場面から選ぶ（任意・あとから調整できます）</label>
+      <div class="chips" id="tsutaeruPresets">
+        <label class="chip" data-preset="hospital">🏥 病院で伝える</label>
+        <label class="chip" data-preset="family">🏠 家族に伝える</label>
+        <label class="chip" data-preset="work">💼 職場に伝える</label>
+      </div>
+    </div>
+
+    <div class="card no-print" id="tsutaeruChipsCard" style="padding-top:14px;">
+      <div class="q" style="margin:0 16px 12px;"><label>いつから?</label><div class="chips" id="twWhen"></div></div>
+      <div class="q" style="margin:0 16px 12px;"><label>どのくらい?</label><div class="chips" id="twDegree"></div></div>
+      <div class="q" style="margin:0 16px 12px;"><label>つらさを数字で（0〜10・任意）</label><div class="chips" id="twNrs"></div></div>
+      <div class="q" style="margin:0 16px 12px;"><label>どこが?（複数選べます）</label><div class="chips" id="twPlace"></div></div>
+      <div class="q" style="margin:0 16px 12px;">
+        <label>どんな感じ?（複数選べます）</label><div class="chips" id="twFeel"></div>
+        <button type="button" class="btn-link no-print" id="tsutaeruDictJump" style="margin-top:6px;">🔍 しっくりくる言葉が見つからない時は、表現辞典で探す</button>
+      </div>
+      <div class="q" style="margin:0 16px 12px;"><label>気持ちの面は?（複数選べます）</label><div class="chips" id="twMind"></div></div>
+      <div class="q" style="margin:0 16px 14px;"><label>体の状態・生活面は?（複数選べます）</label><div class="chips" id="twBody"></div></div>
+    </div>
+
+    <div class="result-card">
+      <h3>できた文章（自由に書き直せます）</h3>
+      <div class="seg" id="tsutaeruModeSeg" style="margin-bottom:10px;">
+        <button class="seg-btn" data-mode="casual">やさしい文章</button>
+        <button class="seg-btn" data-mode="objective">客観的サマリー</button>
+      </div>
+      <div class="chips no-print" id="tsutaeruIncludeToggles" style="margin-bottom:10px;">
+        <label class="chip no-print" id="tsutaeruIncludeDataToggle" hidden>📊 記録データ・普段との比較を添える</label>
+        <label class="chip no-print" id="tsutaeruIncludeCheckToggle" hidden>🧭 体質チェックの結果を添える</label>
+        <label class="chip no-print" id="tsutaeruIncludeIntakeToggle" hidden>📋 問診の結果を添える</label>
+      </div>
+      <textarea id="tsutaeruText" rows="5" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+      <p class="note">※ 選んだ言葉から自動で組み立てた文章です。内容は自由に編集してから伝えてください。「客観的サマリー」は、部位・程度・性状・増悪寛解因子・随伴症状を整理して伝えるための書式です。</p>
+      <div class="output-bar no-print">
+        <button class="btn-out" id="tsutaeruRegen">🔄 作り直す</button>
+        <button class="btn-out" id="tsutaeruCopy">📤 共有・コピー</button>
+        <button class="btn-out" id="tsutaeruToRecord">📅 この文章を記録に使う</button>
+      </div>
+    </div>
+
+    <div id="tsutaeruCareSuggest" class="no-print" hidden></div>
+    <button id="tsutaeruResultJump" class="result-jump no-print" hidden>💌 できた文章を見る</button>
+
+    <!-- 症状を言葉にする：症状そのものより「今日どのくらい動けるか」を短く言語化する -->
+    <div class="card" id="capacityCard" style="padding:14px 16px; margin-top:14px;"></div>
+
+    <!-- 体調の取扱説明書：相手ごとに長さ・トーンを変えて説明できるようにする -->
+    <div class="card" id="torisetsuCard" style="padding:14px 16px;"></div>
+  </section>
+
+  <!-- 表現辞典：「しっくりくる言葉」を、選ぶプレッシャーなくだらだら眺めて探せる場所 -->
+  <section id="tab-exprdict" class="tab-panel">
+    <div class="toolbar">
+      <span class="hint">言葉を選ぶ必要はありません。眺めて「これかも」と思ったものをタップすると、あとで「伝える」にまとめて送れます</span>
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <input type="text" id="exprDictSearch" placeholder="🔍 例：頭、ズキズキ、だるい…で検索" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+      <div class="chips" id="exprDictCats" style="margin-top:10px;"></div>
+    </div>
+
+    <div id="exprDictResults"></div>
+
+    <div id="exprDictActionBar" class="no-print" hidden style="position:sticky; bottom:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 16px; background:var(--surface); border-top:1px solid var(--border);">
+      <span class="hint" id="exprDictSelectedCount"></span>
+      <button type="button" id="exprDictSendBtn" class="btn-sub">💌 伝えるに追加する</button>
+    </div>
+  </section>
+
+  <!-- 経過・通院：あとから思い出せない情報を残すためのページ -->
+  <section id="tab-history" class="tab-panel">
+    <div class="toolbar">
+      <span class="hint">いつから・どんな症状か・症状の変化など、あとから思い出しにくい情報を残しておけます</span>
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">📝 経過メモ（自由記述・自動保存）</label>
+      <textarea id="historyMemo" rows="8" placeholder="例）2024年3月頃から頭痛が始まり、最初は月1回程度だったが、最近は週2〜3回に増えている。◯◯科に通院中、△△という薬を処方されている、など" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+      <p class="note" style="margin:6px 0 0;">入力するたびに自動で保存されます。今の自分が一番覚えていることを、思いついた時に書き足していくのがおすすめです。</p>
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:4px;">📋 経過を質問形式で入力</label>
+      <p class="note" style="margin:0 0 10px;">記録だけではわからない「振り返っての情報」を、質問ごとに少しずつ埋めていけます。全部答えなくても大丈夫です。答えた分だけ、下の自動まとめに反映されます。</p>
+      <div id="historyQuestionnaire"></div>
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">🤖 記録から自動でまとめる</label>
+      <p class="note" style="margin:0 0 10px;">上の質問への回答と、これまでの記録・通院日・生理記録をあわせて、経過のまとめを作ります。</p>
+      <button type="button" id="generateHistorySummaryBtn" class="btn-sub">🤖 自動まとめを作成する</button>
+      <div id="historySummaryResult" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card" style="padding:14px 16px;">
+      <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">🏥 通院日の一覧</label>
+      <div id="hospitalVisitList"></div>
+    </div>
+  </section>
+
+  <!-- ことばのおまもり（旧：伝える練習）：心ない一言を言われた瞬間に、自分の認識を手放さずに言葉を返すための練習 -->
+  <section id="tab-kaeshi" class="tab-panel">
+    <div class="toolbar">
+      <span class="hint">「正しい返答」を覚える場所ではなく、自分の認識を手放さずに会話する練習をする場所です</span>
+    </div>
+
+    <div id="tsReviewBanner" class="card no-print" hidden style="padding:10px 14px; background:var(--panel);"></div>
+
+    <div class="card" id="tsArmorCard" style="padding:14px 16px;"></div>
+
+    <div class="seg" id="tsModeSeg">
+      <button class="seg-btn active" data-mode="quick">🌱 まずはひとこと</button>
+      <button class="seg-btn" data-mode="practice">🧠 練習する</button>
+      <button class="seg-btn" data-mode="prepare">📖 ことばを備える</button>
+    </div>
+
+    <!-- 🌱まずはひとこと：「何て言われた？」検索＋詳細パネル（「もっと詳しく話す？」で🌷しっかり伝えるまで展開） -->
+    <div id="tsBrowseView">
+      <div class="toolbar">
+        <input type="search" id="tsSearch" placeholder="今、何て言われた？（例：気のせい、寝てる、運動）" />
+      </div>
+      <div class="chips" id="tsAudienceFilter" style="margin:0 16px 10px;"></div>
+      <div class="chips" id="tsPhraseList" style="margin:0 16px 10px;"></div>
+      <div id="tsDetailWrap"></div>
+    </div>
+
+    <!-- 🧠練習する：フラッシュカード -->
+    <div id="tsPracticeView" hidden>
+      <div id="tsFlashView">
+        <div class="card" id="tsFlashCard" style="padding:20px 16px; text-align:center;"></div>
+        <div id="tsFlashControls" style="display:flex; gap:8px; justify-content:center; margin-top:10px;">
+          <button type="button" class="btn-out" id="tsFlashReveal">答えを見る</button>
+          <button type="button" class="btn-sub" id="tsFlashNext">次へ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 📖ことばを備える：今日できたこと・私が伝えたいこと3点セット・武装の設定・一覧・自分の言葉を追加 -->
+    <div id="tsPrepareView" hidden>
+      <div class="card" id="tsChecklistCard" style="padding:14px 16px;"></div>
+
+      <div class="card" style="padding:14px 16px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">💬 私が伝えたいこと（3つまで）</label>
+        <p class="note" style="margin:0 0 10px;">会話の中で何を言われても、最後はこの3つのどれかに戻ればいい、という自分専用の軸です。</p>
+        <div id="tsCoreMessages"></div>
+      </div>
+
+      <div class="card" id="tsPrepareUsableCard" style="padding:14px 16px;"></div>
+
+      <div class="card" style="padding:14px 16px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:6px;">🛡️ 今日の武装を選び直す</label>
+        <p class="note" style="margin:0 0 10px;">「今日これを言われたら困る」を3つまで選んでおくと、上のカードに固定されます。</p>
+        <div class="chips" id="tsArmorPicker"></div>
+      </div>
+
+      <div class="card" style="padding:14px 16px;">
+        <label style="display:block; font-weight:600; font-size:13px; margin-bottom:8px;">＋ 自分の言葉を追加</label>
+        <div class="q" style="margin:0 0 8px;">
+          <label>言われたこと</label>
+          <input type="text" id="tsNewLine" placeholder="例：気のせいじゃない？" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;" />
+        </div>
+        <div class="q" style="margin:0 0 8px;">
+          <label>そのとき、言えた？</label>
+          <div class="chips">
+            <label class="chip" id="tsNewCouldntChip">😶 何も言えなかった</label>
+          </div>
+        </div>
+        <div class="q" style="margin:0 0 8px;">
+          <label>本当は何と言いたかった？</label>
+          <textarea id="tsNewWanted" rows="2" placeholder="言葉にならなくてもいいので、思いつく範囲で" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+        </div>
+        <div class="q" style="margin:0 0 10px;">
+          <label>次に言うなら</label>
+          <textarea id="tsNewNext" rows="2" placeholder="次に同じことを言われたら、こう言う" style="width:100%; padding:10px; font-size:14px; border:1px solid var(--border); border-radius:8px; font-family:inherit;"></textarea>
+        </div>
+        <div class="q" style="margin:0 0 10px;">
+          <label>相手（任意）</label>
+          <div class="chips" id="tsNewAudience"></div>
+        </div>
+        <button type="button" class="btn-sub" id="tsAddBtn">追加する</button>
+      </div>
+
+      <div id="tsPrepareList"></div>
+    </div>
+  </section>
+</main>
+
+<!-- サイトのすみっこに住んでいる小さな相棒。歩く/揺れる/キラッとするのはCSS、
+     いつ・どれくらい動くかはapp.js側のstate machineが決める（詳細はapp.js末尾を参照） -->
+<div id="siteMascot" class="site-mascot no-print" aria-hidden="true">
+  <div class="mascot-bubble" id="mascotBubble"><span id="mascotBubbleText"></span></div>
+  <div class="site-mascot-shadow" id="mascotShadow"></div>
+  <div class="site-mascot-body" id="mascotBody">
+    <img src="mascot-normal.png" class="site-mascot-img" id="mascotImg" alt="マスコット" draggable="false" />
+    <img class="site-mascot-img-ghost" id="mascotImgGhost" alt="" draggable="false" aria-hidden="true" />
+  </div>
+  <div class="site-mascot-fx" id="mascotFx"></div>
+</div>
+<div class="mascot-call-bar no-print">
+  <button type="button" id="mascotCallBtn" class="mascot-call-btn" title="おいで">😻 おいで</button>
+  <button type="button" id="mascotByeBtn" class="mascot-call-btn" title="またね">😸 またね</button>
+</div>
+
+<!-- しんどいときモード：普段の画面をすべて覆う、超簡易な画面 -->
+<div id="sosOverlay" class="sos-overlay no-print" hidden></div>
+
+<script src="assets/emoji/twemoji.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  // 新しいバージョンが見つかったら即座に切り替えて自動リロードする
+  // （キャッシュのせいで更新が反映されない、を起こさないため）
+  let swRefreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (swRefreshed) return;
+    swRefreshed = true;
+    location.reload();
+  });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    reg.update().catch(()=>{});
+    setInterval(() => reg.update().catch(()=>{}), 60 * 1000);
+  }).catch(()=>{});
+}
+</script>
+</body>
+</html>
