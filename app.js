@@ -337,15 +337,25 @@ function mergeBackupData(local, incoming) {
   // 単純にlocal優先のままにする（mergedの初期値が{...local}なので、何もしなければlocalが残る）
   return merged;
 }
-const LAN_SYNC_TIMEOUT_MS = 3000;
-async function fetchLanSync(url, opts) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), LAN_SYNC_TIMEOUT_MS);
-  try {
-    return await fetch(url, { ...opts, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
+// 実機のスマホから試したところ3秒では間に合わないことがあったため、他のAPI呼び出しと同じ8秒にし、
+// 一度だけ再試行もする（Wi-Fiの瞬断・PowerShellのRunspace起動待ちなどを想定）
+const LAN_SYNC_TIMEOUT_MS = 8000;
+async function fetchLanSync(url, opts, retries) {
+  if (retries == null) retries = 1;
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), LAN_SYNC_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...opts, signal: controller.signal });
+    } catch (e) {
+      lastErr = e;
+      if (i < retries) await new Promise(r => setTimeout(r, 400));
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
+  throw lastErr;
 }
 async function runLanSync(opts) {
   opts = opts || {};
@@ -387,7 +397,8 @@ async function runLanSync(opts) {
     if (location.protocol === 'https:' && base.startsWith('http://')) {
       setStatus('このアドレス（https://…）からは、暗号化なしのパソコンに直接アクセスできない仕様です。スマホでも同じパソコンのアドレス（http://192.168.x.x:8790）を開いてから同期してください。');
     } else {
-      setStatus('パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）');
+      const detail = (e && e.name) ? `（詳細: ${e.name}${e.message ? ' - ' + e.message : ''}）` : '';
+      setStatus(`パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）${detail}`);
     }
   }
 }
