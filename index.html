@@ -179,6 +179,16 @@
       <span class="hint">体質チェック・問診の履歴・メモ・その時の天気を残せます</span>
     </div>
 
+    <div id="lanSyncBanner" class="card no-print" style="padding:10px 14px;">
+      <b style="font-size:13px;">🔄 パソコンと同期（家のWi-Fi内だけ・クラウド不使用）</b>
+      <p class="note" style="margin:4px 0 8px;">パソコンのアドレス（例: http://192.168.0.16:8790）を一度入力しておくと、同じWi-Fiに繋がっている時だけ自動で記録を合体します。データはインターネットを経由しません。</p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <input type="text" id="lanSyncUrl" placeholder="http://192.168.0.16:8790" style="flex:1; min-width:200px; padding:8px 10px; font-size:13px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--ink);">
+        <button type="button" id="lanSyncBtn" class="btn-sub">🔄 今すぐ同期</button>
+      </div>
+      <p class="note" id="lanSyncStatus" style="margin:6px 0 0;"></p>
+    </div>
+
     <div id="weatherAlertBanner" class="card" style="padding:10px 14px;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
         <b style="font-size:13px;">🌏 台風・線状降水帯・大雨の自動チェック</b>

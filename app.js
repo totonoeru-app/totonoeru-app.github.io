@@ -212,9 +212,11 @@ document.getElementById('energySaveToggle').addEventListener('click', () => {
   toggleBtn.addEventListener('click', () => { if (overlay.hidden) openSos(); else closeSos(); });
 })();
 
-// ---------- データのバックアップ / 復元 ----------
-function exportBackup() {
-  const data = {
+// ---------- データのバックアップ / 復元 / LAN同期 ----------
+// バックアップ書き出し・ファイル復元・LAN同期の3つで同じデータの形を使い回すため、
+// 「今のlocalStorageから作る」「localStorageへ書き戻す」を関数として切り出しておく
+function buildBackupData() {
+  return {
     version: 1,
     exportedAt: new Date().toISOString(),
     check: LS.get('check', {}),
@@ -236,6 +238,30 @@ function exportBackup() {
     tsChecklistLog: LS.get('tsChecklistLog', []),
     factorTagLog: LS.get('factorTagLog', {}),
   };
+}
+function applyBackupData(data) {
+  if (!data || typeof data !== 'object') throw new Error('invalid');
+  if (data.check) LS.set('check', data.check);
+  if (data.intake) LS.set('intake', data.intake);
+  if (typeof data.intakeQuickMode === 'boolean') LS.set('intakeQuickMode', data.intakeQuickMode);
+  if (Array.isArray(data.records)) LS.set('records', data.records);
+  if (data.tsutaeru) LS.set('tsutaeru', data.tsutaeru);
+  if (data.handoverLog) LS.set('handoverLog', data.handoverLog);
+  if (data.minLineLog) LS.set('minLineLog', data.minLineLog);
+  if (data.torisetsu) LS.set('torisetsu', data.torisetsu);
+  if (Array.isArray(data.forecastAccuracyLog)) LS.set('forecastAccuracyLog', data.forecastAccuracyLog);
+  if (data.dailyForecastSnapshot) LS.set('dailyForecastSnapshot', data.dailyForecastSnapshot);
+  if (typeof data.ganbattaPoints === 'number') LS.set('ganbattaPoints', data.ganbattaPoints);
+  if (Array.isArray(data.ganbattaPointsLog)) LS.set('ganbattaPointsLog', data.ganbattaPointsLog);
+  if (Array.isArray(data.ganbattaRecordDates)) LS.set('ganbattaRecordDates', data.ganbattaRecordDates);
+  if (Array.isArray(data.ganbattaDekitaDates)) LS.set('ganbattaDekitaDates', data.ganbattaDekitaDates);
+  if (Array.isArray(data.ganbattaForecastBetterDates)) LS.set('ganbattaForecastBetterDates', data.ganbattaForecastBetterDates);
+  if (Array.isArray(data.dekitaLog)) LS.set('dekitaLog', data.dekitaLog);
+  if (Array.isArray(data.tsChecklistLog)) LS.set('tsChecklistLog', data.tsChecklistLog);
+  if (data.factorTagLog && typeof data.factorTagLog === 'object') LS.set('factorTagLog', data.factorTagLog);
+}
+function exportBackup() {
+  const data = buildBackupData();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -251,25 +277,7 @@ function importBackup(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      if (!data || typeof data !== 'object') throw new Error('invalid');
-      if (data.check) LS.set('check', data.check);
-      if (data.intake) LS.set('intake', data.intake);
-      if (typeof data.intakeQuickMode === 'boolean') LS.set('intakeQuickMode', data.intakeQuickMode);
-      if (Array.isArray(data.records)) LS.set('records', data.records);
-      if (data.tsutaeru) LS.set('tsutaeru', data.tsutaeru);
-      if (data.handoverLog) LS.set('handoverLog', data.handoverLog);
-      if (data.minLineLog) LS.set('minLineLog', data.minLineLog);
-      if (data.torisetsu) LS.set('torisetsu', data.torisetsu);
-      if (Array.isArray(data.forecastAccuracyLog)) LS.set('forecastAccuracyLog', data.forecastAccuracyLog);
-      if (data.dailyForecastSnapshot) LS.set('dailyForecastSnapshot', data.dailyForecastSnapshot);
-      if (typeof data.ganbattaPoints === 'number') LS.set('ganbattaPoints', data.ganbattaPoints);
-      if (Array.isArray(data.ganbattaPointsLog)) LS.set('ganbattaPointsLog', data.ganbattaPointsLog);
-      if (Array.isArray(data.ganbattaRecordDates)) LS.set('ganbattaRecordDates', data.ganbattaRecordDates);
-      if (Array.isArray(data.ganbattaDekitaDates)) LS.set('ganbattaDekitaDates', data.ganbattaDekitaDates);
-      if (Array.isArray(data.ganbattaForecastBetterDates)) LS.set('ganbattaForecastBetterDates', data.ganbattaForecastBetterDates);
-      if (Array.isArray(data.dekitaLog)) LS.set('dekitaLog', data.dekitaLog);
-      if (Array.isArray(data.tsChecklistLog)) LS.set('tsChecklistLog', data.tsChecklistLog);
-      if (data.factorTagLog && typeof data.factorTagLog === 'object') LS.set('factorTagLog', data.factorTagLog);
+      applyBackupData(data);
       alert('データを復元しました。ページを再読み込みします。');
       location.reload();
     } catch {
@@ -284,6 +292,103 @@ document.getElementById('importBackup').addEventListener('change', e => {
   if (file) importBackup(file);
   e.target.value = '';
 });
+
+// ---------- LAN同期（家のWi-Fi上のパソコンとだけ、インターネットを経由せず記録をやり取りする） ----------
+// 「クラウドには一切預けたくないが、パソコン・スマホの手動バックアップ往復は面倒」という要望から。
+// 同じWi-Fi上にあるパソコンのLAN開発サーバー（.claude/static-server.ps1、/api/syncを追加済み）を
+// 単純な「置き場」として使い、各端末が「取得→自分のデータと合体→書き戻す」を行うことで、
+// どちら側からも記録を失わずに同期できるようにする。サーバー自身は合体処理をせずただ保存するだけ
+// （合体のロジックは全端末で共通のこの関数が担う）
+function mergeBackupData(local, incoming) {
+  if (!incoming || typeof incoming !== 'object') return local;
+  if (!local || typeof local !== 'object') return incoming;
+  const merged = { ...local };
+  // id付きの配列（記録・できたことアルバム等）はidで合体する。同じidが両方にある場合は
+  // 「今使っている端末（local）」の内容を優先する（同時編集の衝突は稀という前提の単純な方針）
+  const idArrayKeys = ['records', 'dekitaLog', 'ganbattaPointsLog', 'forecastAccuracyLog', 'tsChecklistLog'];
+  idArrayKeys.forEach(key => {
+    const a = Array.isArray(local[key]) ? local[key] : [];
+    const b = Array.isArray(incoming[key]) ? incoming[key] : [];
+    const byId = new Map();
+    b.forEach(item => { if (item && item.id != null) byId.set(item.id, item); });
+    a.forEach(item => { if (item && item.id != null) byId.set(item.id, item); }); // localで上書き＝local優先
+    // idを持たない要素（念のため）はそのまま両方残す
+    const noId = [...a, ...b].filter(item => !item || item.id == null);
+    merged[key] = [...byId.values(), ...noId];
+  });
+  // 日付文字列だけの配列（がんばったポイントの記録日など）は重複を除いた集合として合体する
+  const dateArrayKeys = ['ganbattaRecordDates', 'ganbattaDekitaDates', 'ganbattaForecastBetterDates'];
+  dateArrayKeys.forEach(key => {
+    const a = Array.isArray(local[key]) ? local[key] : [];
+    const b = Array.isArray(incoming[key]) ? incoming[key] : [];
+    merged[key] = [...new Set([...a, ...b])].sort();
+  });
+  // 日付をキーにしたオブジェクト（申し送り・最低ラインなど）はキーを合体し、衝突時はlocal優先
+  const dateMapKeys = ['handoverLog', 'minLineLog', 'dailyForecastSnapshot', 'factorTagLog'];
+  dateMapKeys.forEach(key => {
+    const a = (local[key] && typeof local[key] === 'object') ? local[key] : {};
+    const b = (incoming[key] && typeof incoming[key] === 'object') ? incoming[key] : {};
+    merged[key] = { ...b, ...a };
+  });
+  // その他（体質チェック・問診・伝える文章・がんばったポイント数など「今の状態」に近いもの）は
+  // 単純にlocal優先のままにする（mergedの初期値が{...local}なので、何もしなければlocalが残る）
+  return merged;
+}
+const LAN_SYNC_TIMEOUT_MS = 3000;
+async function fetchLanSync(url, opts) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), LAN_SYNC_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+async function runLanSync(opts) {
+  opts = opts || {};
+  const statusEl = document.getElementById('lanSyncStatus');
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+  const base = (LS.get('lanSyncUrl', '') || '').trim().replace(/\/+$/, '');
+  if (!base) {
+    if (!opts.silent) setStatus('先にパソコンのアドレスを入力してください（例: http://192.168.0.16:8790）');
+    return;
+  }
+  if (!opts.silent) setStatus('同期中…');
+  try {
+    const getRes = await fetchLanSync(`${base}/api/sync`);
+    if (!getRes.ok) throw new Error('get-failed');
+    const incoming = await getRes.json();
+    const local = buildBackupData();
+    const merged = mergeBackupData(local, incoming);
+    const changed = JSON.stringify(local) !== JSON.stringify(merged);
+    // サーバー側には常に最新の合体結果を書き戻しておく（他の端末が次に取得したときのため）
+    await fetchLanSync(`${base}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged),
+    });
+    LS.set('lanSyncLastAt', Date.now());
+    if (changed) {
+      applyBackupData(merged);
+      setStatus('同期して新しい記録を取り込みました。ページを再読み込みします。');
+      setTimeout(() => location.reload(), 600);
+    } else {
+      setStatus(`同期しました（変化なし・${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}）`);
+    }
+  } catch (e) {
+    if (!opts.silent) setStatus('パソコンが見つかりませんでした（同じWi-Fiに繋がっているか、パソコンが起動しているか確認してください）');
+  }
+}
+(function initLanSyncUI() {
+  const input = document.getElementById('lanSyncUrl');
+  const btn = document.getElementById('lanSyncBtn');
+  if (!input || !btn) return;
+  input.value = LS.get('lanSyncUrl', '');
+  input.addEventListener('change', () => LS.set('lanSyncUrl', input.value.trim()));
+  btn.addEventListener('click', () => runLanSync({ silent: false }));
+  // ページを開いた直後、パソコンが同じWi-Fi上にいれば静かに同期を試す（無ければ何も表示せず諦める）
+  if (LS.get('lanSyncUrl', '')) setTimeout(() => runLanSync({ silent: true }), 1500);
+})();
 
 // ============================================================
 // 体質チェック
