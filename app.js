@@ -981,69 +981,121 @@ function detectLinearRainbandFromHeadline(headlineText) {
   return /顕著な大雨|線状降水帯/.test(headlineText || '');
 }
 
+// 気象庁の地方ごとの個別JSON（旧: /bosai/warning/data/warning/{officeCode}.json）は、実際には
+// 更新が止まっている地域があることが判明した（例：岐阜県のJSONが2026年5月の「注意報解除」情報の
+// まま止まっており、実際には大雨危険警報・土砂災害危険警報級の状況が出ていても一切反映されなかった。
+// 気象庁の警報・注意報ページ自体が今使っているデータで確認して発覚）。気象庁のサイトが実際に使っている
+// 新しいデータ（/bosai/warning/data/r8/map.json）に切り替える。
+//
+// この1ファイルは全国ぶんの「発表イベント」を時系列で並べたログで、同じ地域が何度も登場する。
+// 重要な点として、1件のイベントは「その時点で新たに変化した警報等の種類だけ」を載せている
+// （例：大雨危険警報の発表イベントと、その後の土砂災害危険警報の発表イベントは別々のログ行になり、
+// 後者には大雨の情報が含まれない）。そのため「地域ごとに一番新しい1件だけ採用する」と、複数の
+// 警報が同時に発表されている場合に後から出た方しか拾えなくなる不具合になる（実際に確認：岐阜県で
+// 大雨危険警報と土砂災害危険警報が両方発表中なのに、後発の土砂災害の行しか採用されず、土砂災害は
+// このサイトの方針で除外しているため結果的に「岐阜は何も出ていない」ことになっていた）。
+// 正しくは、地域×警報コードごとに時系列で状態を再生し、最後に「解除」されていない警報コードだけを
+// 「今アクティブなもの」として残す必要がある
+let jmaWarningMapCache = null;
+async function loadJmaWarningMap(force) {
+  if (!force && jmaWarningMapCache && (Date.now() - jmaWarningMapCache.fetchedAt) < 10 * 60 * 1000) return jmaWarningMapCache;
+  let res;
+  try { res = await fetchWithRetry('https://www.jma.go.jp/bosai/warning/data/r8/map.json'); }
+  catch (e) { const err = new Error('jma-warning-map-failed'); err.stage = 'warning-fetch'; throw err; }
+  const arr = await res.json();
+  // 時系列順（古い→新しい）に再生する必要があるので、まずcontrolDatetime昇順に並べる
+  const sorted = [...arr].sort((a, b) => (a.controlDatetime < b.controlDatetime ? -1 : 1));
+  // areaCode -> { activeKinds: Map<code, kindObj>, headlineText, controlDatetime(最新) }
+  const stateByArea = new Map();
+  sorted.forEach(entry => {
+    const cd = entry.controlDatetime;
+    ['class10Items', 'class20Items'].forEach(field => {
+      ((entry.warning && entry.warning[field]) || []).forEach(item => {
+        let state = stateByArea.get(item.areaCode);
+        if (!state) { state = { activeKinds: new Map(), headlineText: null, controlDatetime: cd }; stateByArea.set(item.areaCode, state); }
+        (item.kinds || []).forEach(k => {
+          if (!k.code) {
+            // code無し（「発表警報・注意報はなし」等）は、その地域の警報等が一括で解除されたことを示す
+            state.activeKinds.clear();
+          } else if (k.status === '解除') {
+            state.activeKinds.delete(k.code);
+          } else {
+            state.activeKinds.set(k.code, k);
+          }
+        });
+        state.headlineText = entry.headlineText || state.headlineText;
+        state.controlDatetime = cd;
+      });
+    });
+  });
+  jmaWarningMapCache = { fetchedAt: Date.now(), stateByArea };
+  return jmaWarningMapCache;
+}
+// 指定した地域コードの「今、発表中のもの」を取り出す。土砂災害は体調との関連というこのサイトの
+// 主旨から外れるため、そもそも集計に含めない
+function activeInfosForArea(stateByArea, areaCode) {
+  const state = stateByArea.get(areaCode);
+  if (!state) return { infos: [], headlineText: null };
+  const infos = [...state.activeKinds.values()]
+    .map(k => JMA_WARNING_CODE_MEANING[k.code])
+    .filter(Boolean)
+    .filter(i => i.kind !== 'landslide');
+  return { infos, headlineText: state.headlineText };
+}
 async function fetchOfficialAlerts(lat, lon) {
   const areaMaster = await loadJmaAreaMaster();
   const muniCd = await reverseGeocodeMuniCd(lat, lon);
   const resolved = resolveJmaArea(areaMaster, muniCd);
   if (!resolved) { const err = new Error('jma-area-resolve-failed'); err.stage = 'area-resolve'; throw err; }
-  let res;
-  try { res = await fetchWithRetry(`https://www.jma.go.jp/bosai/warning/data/warning/${resolved.officeCode}.json`); }
-  catch (e) { const err = new Error('jma-warning-fetch-failed'); err.stage = 'warning-fetch'; throw err; }
-  const j = await res.json();
-  const codes = [];
-  (j.areaTypes || []).forEach(t => {
-    (t.areas || []).forEach(a => {
-      if (a.code === resolved.class20Code || a.code === resolved.class10Code) {
-        (a.warnings || []).forEach(w => { if (w.code && w.status !== '解除') codes.push(w.code); });
-      }
-    });
-  });
-  // 土砂災害は気圧・天候と体調の関連というこのサイトの主旨から外れるため、そもそも集計に含めない
-  const infos = codes.map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean).filter(i => i.kind !== 'landslide');
-  // 種類（kind）ごとに、いちばんレベルの高いものだけを残す（同じ種類の警報・特別警報が両方codesに出ることがあるため）
+  const map = await loadJmaWarningMap();
+  // 細かい区域（class20）にデータがあればそちらを優先し、無ければ大きい区域（class10）を使う
+  let { infos, headlineText } = activeInfosForArea(map.stateByArea, resolved.class20Code);
+  if (!infos.length) {
+    const wider = activeInfosForArea(map.stateByArea, resolved.class10Code);
+    infos = wider.infos;
+    headlineText = headlineText || wider.headlineText;
+  }
+  // 種類（kind）ごとに、いちばんレベルの高いものだけを残す（同じ種類の警報・特別警報が両方に出ることがあるため）
   const byKind = {};
   infos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
   const allActive = Object.values(byKind).sort((a, b) => b.level - a.level);
   const topOf = kind => byKind[kind] || null;
   const rain = topOf('rain');
   const storm = topOf('storm');
-  const headlineHasRainband = detectLinearRainbandFromHeadline(j.headlineText);
+  const headlineHasRainband = detectLinearRainbandFromHeadline(headlineText);
   return {
     areaName: resolved.areaName,
     rainLevel: rain ? rain.level : 0, rainLabel: rain ? rain.label : null,
     stormLevel: storm ? storm.level : 0, stormLabel: storm ? storm.label : null,
     // 大雨危険警報・大雨特別警報（代替指標）、または見出し文に「線状降水帯」「顕著な大雨」の記載があれば true
     linearRainbandLikely: (!!rain && rain.level >= 3) || headlineHasRainband,
-    headlineText: j.headlineText || null,
+    headlineText: headlineText || null,
     allActive, // rain/storm以外も含む、現在発表中のすべての警報・注意報・特別警報（レベル降順）
     otherActive: allActive.filter(i => i.kind !== 'rain' && i.kind !== 'storm'),
-    reportDatetime: j.reportDatetime || null,
+    reportDatetime: (map.stateByArea.get(resolved.class20Code) || map.stateByArea.get(resolved.class10Code) || {}).controlDatetime || null,
     status: 'ok',
   };
 }
 
 // ---------- 全国の警報・注意報一覧 ----------
-// 現在地だけでなく日本全国の状況もまとめて見たい、という要望から追加。気象庁は「全国まとめ」の
-// 単独APIを公開していないため、area.jsonにある全地方（office、58件）ぶんの警報・注意報JSONを
-// 1つずつ取得して集計する。頻繁に叩くものではないため、結果を20分キャッシュする
+// 現在地だけでなく日本全国の状況もまとめて見たい、という要望から追加。loadJmaWarningMap()が
+// 全国ぶんの発表状況を1回の取得でまとめて持っているので、地方（office）ごとに管轄区域
+// （area.jsonのoffices[code].children、細分区域コードの配列）を集計するだけでよい
+// （以前は地方の数だけ個別リクエストしていたが、全国1ファイルの取得だけで済むようになった）
 const NATIONWIDE_ALERT_CACHE_TTL = 20 * 60 * 1000;
-async function fetchOfficeWarningSummary(officeCode, officeName) {
-  let j;
-  try {
-    const res = await fetchWithRetry(`https://www.jma.go.jp/bosai/warning/data/warning/${officeCode}.json`, { retries: 0 });
-    j = await res.json();
-  } catch { return null; }
-  const activeCodes = new Set();
-  (j.areaTypes || []).forEach(t => (t.areas || []).forEach(a => (a.warnings || []).forEach(w => {
-    if (w.code && w.status !== '解除') activeCodes.add(w.code);
-  })));
-  // 土砂災害は体調との関連というこのサイトの主旨から外れるため、全国一覧でも除外する
-  const infos = [...activeCodes].map(c => JMA_WARNING_CODE_MEANING[c]).filter(Boolean).filter(i => i.kind !== 'landslide');
+function summarizeOfficeFromMap(officeCode, officeName, children, stateByArea) {
+  const allInfos = [];
+  let headlineText = null;
+  (children || []).forEach(childCode => {
+    const { infos, headlineText: h } = activeInfosForArea(stateByArea, childCode);
+    allInfos.push(...infos);
+    if (h && !headlineText) headlineText = h;
+  });
   const byKind = {};
-  infos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
+  allInfos.forEach(i => { if (!byKind[i.kind] || i.level > byKind[i.kind].level) byKind[i.kind] = i; });
   const top = Object.values(byKind).sort((a, b) => b.level - a.level);
-  const linearRainbandLikely = (byKind.rain && byKind.rain.level >= 3) || detectLinearRainbandFromHeadline(j.headlineText);
-  return { officeCode, officeName, top, linearRainbandLikely, headlineText: j.headlineText || null };
+  const linearRainbandLikely = (byKind.rain && byKind.rain.level >= 3) || detectLinearRainbandFromHeadline(headlineText);
+  return { officeCode, officeName, top, linearRainbandLikely, headlineText };
 }
 async function fetchNationwideAlerts(force) {
   if (!force) {
@@ -1051,15 +1103,9 @@ async function fetchNationwideAlerts(force) {
     if (cached && cached.fetchedAt && (Date.now() - cached.fetchedAt) < NATIONWIDE_ALERT_CACHE_TTL) return cached.data;
   }
   const areaMaster = await loadJmaAreaMaster();
-  const offices = Object.entries(areaMaster.offices).map(([code, o]) => ({ code, name: o.name }));
-  // 気象庁サイトへ一度に大量アクセスしないよう、少しずつバッチに分けて取得する
-  const results = [];
-  const BATCH = 10;
-  for (let i = 0; i < offices.length; i += BATCH) {
-    const batch = offices.slice(i, i + BATCH);
-    const settled = await Promise.all(batch.map(o => fetchOfficeWarningSummary(o.code, o.name)));
-    results.push(...settled.filter(Boolean));
-  }
+  const map = await loadJmaWarningMap(force);
+  const results = Object.entries(areaMaster.offices)
+    .map(([code, o]) => summarizeOfficeFromMap(code, o.name, o.children, map.stateByArea));
   const maxLevel = r => Math.max(0, ...r.top.map(i => i.level));
   const notable = results
     .filter(r => maxLevel(r) >= 2 || r.linearRainbandLikely)
