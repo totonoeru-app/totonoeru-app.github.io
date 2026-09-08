@@ -25,13 +25,13 @@ style.css
 --ink:#343434;
 --ink-sub:#707070;
 
---accent:#f8b7ca;
+--accent:#ffbcd0;
 --accent-soft:#ffeaf3;
 
 --warm:#ffd6e2;
 --hot:#fff0f5;
 
---border:#f3dbe5;
+--border:#ffe6f0;
 
 --mark:#fff4b5;
 
@@ -39,21 +39,21 @@ style.css
 --surface-2:#fff8fb;
 --panel:#fff3f7;
 
-/* いちごミルク配色（天気タブの時間ごとの予報グラフ用） */
+/* いちごミルク配色（天気タブの時間ごとの予報グラフ用）。彩度はそのまま、明度だけ100%に統一 */
 --wx-temp:#ffbdd8;
---wx-temp-deep:#f594bc;
---wx-dew:#e0bdd3;
+--wx-temp-deep:#ff9ac4;
+--wx-dew:#ffd7f0;
 --wx-wind:#ffd7a9;
---wx-wind-deep:#f2a24e;
---wx-pressure:#c5eefc;
---wx-precip:#f4ecf9;
---wx-precip-deep:#cea3e6;
+--wx-wind-deep:#ffab52;
+--wx-pressure:#c7f1ff;
+--wx-precip:#faf2ff;
+--wx-precip-deep:#e4b5ff;
 --wx-chart-bg:#fffcfe; /* サイトの背景(--bg:#fff8fb)よりさらに薄いピンク */
 
 --shadow:rgba(67,44,55,.09);
 --shadow-soft:rgba(67,44,55,.05);
 
---progress-bg:#f1e5ea;
+--progress-bg:#fff2f8;
 
 }
 
@@ -65,7 +65,7 @@ style.css
   --ink:#f2e6ea;
   --ink-sub:#b8a3ac;
 
-  --accent:#f8b7ca;
+  --accent:#ffbcd0;
   --accent-soft:#3a2830;
 
   --warm:#5c3542;
@@ -317,7 +317,7 @@ main { padding: 12px; max-width: 480px; margin: 0 auto; }
   /* 猫の絵文字（😼🙀）が塗りつぶしのピンクだと彩度が近くて見えにくかったため、
      塗りは真っ白にして輪郭と数字だけを（「体質チェックをやってみる」等と同じ）
      --accentのピンクにする。彩度・明るさを落とさず、はっきりした色のまま使う */
-  background: #fff; color: var(--accent); border: 1px solid var(--accent);
+  background: var(--surface-2); color: var(--accent); border: 1px solid var(--accent);
   font-size: 12px; font-weight: 700; box-sizing: border-box;
 }
 .medal img { display: block; margin: 0; vertical-align: baseline; }
@@ -680,8 +680,8 @@ html {
   text-align: center; font-size: 10px; color: var(--ink-sub);
   margin-bottom: 3px;
 }
-.cal-week span:first-child { color: #e0748f; }
-.cal-week span:last-child { color: #6f9fd8; }
+.cal-week span:first-child { color: #ff84a3; }
+.cal-week span:last-child { color: #83bcff; }
 .cal-grid {
   display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px;
 }
@@ -717,10 +717,10 @@ html {
 }
 .forecast-day .fd-pattern.strong { background: #ffd0d6; color: #b3253d; }
 .forecast-day .fd-pattern.mild { background: #fff3c4; color: #8a6d10; }
-.forecast-day.pattern-strong { box-shadow: inset 0 0 0 2px #e0748f; }
+.forecast-day.pattern-strong { box-shadow: inset 0 0 0 2px #ff84a3; }
 .forecast-day.pattern-mild { box-shadow: inset 0 0 0 2px #f0c34e; }
 .forecast-day.today.pattern-strong,
-.forecast-day.today.pattern-mild { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 4px #e0748f; }
+.forecast-day.today.pattern-mild { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 4px #ff84a3; }
 .cal-cell {
   position: relative;
   min-height: 34px;
@@ -751,7 +751,7 @@ html {
   display: flex; align-items: center; gap: 1px;
   font-size: 9px; line-height: 1;
 }
-.cal-period { color: #e0748f; font-weight: 900; }
+.cal-period { color: #ff84a3; font-weight: 900; }
 
 #dayEntries { margin-top: 10px; scroll-margin-top: var(--header-h, 96px); }
 /* 気分をワンタップしたあと自動スクロールする先。sticky headerに上端が隠れないよう余白を確保する */
