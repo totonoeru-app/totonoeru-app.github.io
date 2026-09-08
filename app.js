@@ -277,8 +277,11 @@ function importBackup(file) {
   reader.onload = () => {
     try {
       const data = JSON.parse(reader.result);
-      applyBackupData(data);
-      alert('データを復元しました。ページを再読み込みします。');
+      // 丸ごと上書きすると、この端末で先に記録していた分が消えてしまう（実際に確認された不具合）。
+      // LAN同期と同じ合体ロジックを使い、読み込んだファイルと今の記録を両方とも残す
+      const merged = mergeBackupData(buildBackupData(), data);
+      applyBackupData(merged);
+      alert('データを取り込みました（今までの記録と合体しています）。ページを再読み込みします。');
       location.reload();
     } catch {
       alert('ファイルを読み込めませんでした。バックアップ用のファイルか確認してください。');
