@@ -317,9 +317,10 @@ main { padding: 12px; max-width: 480px; margin: 0 auto; }
   /* 猫の絵文字（😼🙀）が塗りつぶしのピンクだと彩度が近くて見えにくかったため、
      塗りは真っ白にして輪郭と数字だけを（「体質チェックをやってみる」等と同じ）
      --accentのピンクにする。彩度・明るさを落とさず、はっきりした色のまま使う */
-  background: #fff; color: var(--accent); border: 1.5px solid var(--accent);
+  background: #fff; color: var(--accent); border: 1px solid var(--accent);
   font-size: 12px; font-weight: 700; box-sizing: border-box;
 }
+.medal img { display: block; margin: 0; vertical-align: baseline; }
 .note { color: var(--ink-sub); font-size: 12px; margin: 8px 0 0; }
 
 .hint-list { list-style: none; margin: 0; padding: 0; }
