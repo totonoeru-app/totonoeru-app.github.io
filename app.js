@@ -1654,6 +1654,8 @@ function isPreMenstrualWindow(dateKey, windowDays = 7) {
 }
 
 // その日の記録の中でもっとも目立つ気象イベントを1つだけ選んでカレンダーに出すアイコン
+// worstWeatherIcon()が返す絵文字→Fluent Emojiのファイル名（拡張子なし）。SVG内に直接埋め込む用
+const WORST_WEATHER_ICON_FLUENT_CODE = { '🌊': '1f30a', '🌀': '1f300', '⚠️': '26a0', '🥵': '1f975', '🌬️': '1f32c', '💦': '1f4a6' };
 function worstWeatherIcon(dayRecords) {
   const ws = dayRecords.map(r => r.weather).filter(w => w && w.status === 'ok');
   if (!ws.length) return '';
@@ -1727,7 +1729,14 @@ function buildTrendSVG(recordsAll, opts) {
     const icon = worstWeatherIcon([r]);
     if (icon) eventByDate[r.dateKey] = icon;
   });
-  const markers = dateKeys.map((d, i) => eventByDate[d] ? `<text x="${xPositions[i].toFixed(1)}" y="${padT - 6}" font-size="11" text-anchor="middle">${eventByDate[d]}</text>` : '').join('');
+  const markers = dateKeys.map((d, i) => {
+    const icon = eventByDate[d];
+    if (!icon) return '';
+    const fluentCode = WORST_WEATHER_ICON_FLUENT_CODE[icon];
+    return (USE_FLUENT_EMOJI && fluentCode)
+      ? svgEmojiImage(fluentCode, xPositions[i], padT - 6, 11)
+      : `<text x="${xPositions[i].toFixed(1)}" y="${padT - 6}" font-size="11" text-anchor="middle">${icon}</text>`;
+  }).join('');
   const labels = [];
   dateKeys.forEach((d, i) => {
     if (d.endsWith('-01') || i === 0 || i === n - 1) labels.push(`<text x="${xPositions[i].toFixed(1)}" y="${padT + plotH + 16}" font-size="9" fill="var(--ink-sub)" text-anchor="middle">${d.slice(5)}</text>`);
@@ -1788,13 +1797,17 @@ function buildMoodTrendSVG(recordsAll, overlays) {
 // 天気タブのメトログラム（━気温 ┄露点 ■降水 ┄風 ━気圧背景 ●風のピーク）と同じ色使いで、
 // 体調の推移チャートに重ねて描ける天気レイヤー。露点・風のピークは1日1回の記録スナップショットには
 // 含まれておらず（過去の時間ごとの天気を保存していないため）、この重ね描きでは出せない。
+// 色は気象グラフ（buildMeteogramSVG）が実際にそれぞれの線・棒に使っている色そのものに合わせている
+// （温度→--wx-temp、気圧→--wx-pressure、風速→--wx-wind、降水量→--wx-precip-deep（棒の縁の色。
+// 淡い塗り色--wx-precipだと細い破線では見えにくいため）。湿度だけは気象グラフ側に対応する線が
+// ないため、一番近い概念である露点の色（--wx-dew）を代わりに使う
 const WEATHER_OVERLAY_LAYERS = {
   none: null,
-  temp: { key: 'temp', label: '気温', color: 'var(--accent)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.temp : null },
-  pressure: { key: 'pressure', label: '気圧', color: '#c9a95e', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.pressure : null },
-  humidity: { key: 'humidity', label: '湿度', color: '#7fb3e8', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.humidity : null },
-  wind: { key: 'wind', label: '風速', color: '#d19a2e', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.windSpeed : null },
-  precip: { key: 'precip', label: '降水量', color: '#9c8bd0', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.precipitation : null },
+  temp: { key: 'temp', label: '気温', color: 'var(--wx-temp)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.temp : null },
+  pressure: { key: 'pressure', label: '気圧', color: 'var(--wx-pressure)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.pressure : null },
+  humidity: { key: 'humidity', label: '湿度', color: 'var(--wx-dew)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.humidity : null },
+  wind: { key: 'wind', label: '風速', color: 'var(--wx-wind)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.windSpeed : null },
+  precip: { key: 'precip', label: '降水量', color: 'var(--wx-precip-deep)', accessor: r => (r.weather && r.weather.status === 'ok') ? r.weather.precipitation : null },
 };
 // 複数選択できるようにする（Setに選ばれたキーを保持。'none'相当は空集合で表す）
 let analysisTrendOverlays = new Set();
@@ -5072,7 +5085,7 @@ function renderAnalysis() {
           ${sorted.map((r, i) => `
             <li>
               <div class="rank-head">
-                <span class="medal">${i === 0 ? '🏆' : i === sorted.length - 1 ? '😩' : i + 1}</span>
+                <span class="medal">${i === 0 ? '😼' : i === sorted.length - 1 ? '🙀' : i + 1}</span>
                 <b>${r.day}曜日</b>
                 <span class="badge">${r.n}件</span>
               </div>
@@ -9194,7 +9207,7 @@ renderHistoryQuestionnaire();
   if (!USE_FLUENT_EMOJI) return; // パソコンは何もしない
   // Microsoft Fluent Emoji(3D)を自前ホストして使用。用意していない絵文字だけ
   // 自前ホストのTwemoji(72x72)に自動フォールバックする。
-  const FLUENT_CODES = new Set(['1f300','1f305','1f30a','1f30f','1f319','1f321','1f324','1f326','1f327','1f328','1f32b','1f32c','1f331','1f337','1f338','1f33c','1f33f','1f345','1f35a','1f380','1f389','1f399','1f3af','1f3c3','1f3c6','1f3e0','1f3e5','1f3eb','1f431','1f43e','1f451','1f48c','1f496','1f497','1f49d','1f4a6','1f4a7','1f4a8','1f4ac','1f4ad','1f4bc','1f4be','1f4c5','1f4c8','1f4c9','1f4ca','1f4cb','1f4d6','1f4dd','1f4e4','1f4e5','1f4e9','1f4ee','1f501','1f504','1f50b','1f50d','1f50e','1f514','1f524','1f525','1f52e','1f534','1f538','1f53d','1f5a8','1f5c2','1f5d3','1f60c','1f629','1f634','1f636','1f638','1f63b','1f63d','1f63f','1f640','1f642','1f6cf','1f6e1','1f7e0','1f7e1','1f7e2','1f916','1f937','1f975','1f9a5','1f9e0','1f9e9','1f9ed','1fa77','1faab','2600','2601','2611','2614','2699','26a0','26a1','26c5','26c8','2705','270f','2728','2744','1f198','23fa']);
+  const FLUENT_CODES = new Set(['1f300','1f305','1f30a','1f30f','1f319','1f321','1f324','1f326','1f327','1f328','1f32b','1f32c','1f331','1f337','1f338','1f33c','1f33f','1f345','1f35a','1f380','1f389','1f399','1f3af','1f3c3','1f3c6','1f3e0','1f3e5','1f3eb','1f431','1f43e','1f451','1f48c','1f496','1f497','1f49d','1f4a6','1f4a7','1f4a8','1f4ac','1f4ad','1f4bc','1f4be','1f4c5','1f4c8','1f4c9','1f4ca','1f4cb','1f4d6','1f4dd','1f4e4','1f4e5','1f4e9','1f4ee','1f501','1f504','1f50b','1f50d','1f50e','1f514','1f524','1f525','1f52e','1f534','1f538','1f53d','1f5a8','1f5c2','1f5d3','1f60c','1f629','1f634','1f636','1f638','1f63b','1f63d','1f63f','1f640','1f642','1f6cf','1f6e1','1f7e0','1f7e1','1f7e2','1f916','1f937','1f975','1f9a5','1f9e0','1f9e9','1f9ed','1fa77','1faab','2600','2601','2611','2614','2699','26a0','26a1','26c5','26c8','2705','270f','2728','2744','1f198','23fa','1f63c']);
   let pending = null;
   function parseNow() {
     pending = null;
