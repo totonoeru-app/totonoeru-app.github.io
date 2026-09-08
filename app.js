@@ -12,6 +12,18 @@ function svgEmojiImage(unicode, xCenter, yBaseline, size) {
   const x = xCenter - w / 2, y = yBaseline - h * 0.85;
   return `<image href="assets/emoji/fluent/${unicode}.png" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w}" height="${h}" />`;
 }
+// Microsoft Fluent Emoji(3D)を自前ホストして使用。用意していない絵文字だけ自前ホストのTwemoji(72x72)に
+// 自動フォールバックする（unifyEmojiRenderingのtwemoji.parse()コールバックと共通のリスト）
+const FLUENT_EMOJI_CODES = new Set(['1f300','1f305','1f30a','1f30f','1f319','1f321','1f324','1f326','1f327','1f328','1f32b','1f32c','1f331','1f337','1f338','1f33c','1f33f','1f345','1f35a','1f380','1f389','1f399','1f3af','1f3c3','1f3c6','1f3e0','1f3e5','1f3eb','1f431','1f43e','1f451','1f48c','1f496','1f497','1f49d','1f4a6','1f4a7','1f4a8','1f4ac','1f4ad','1f4bc','1f4be','1f4c5','1f4c8','1f4c9','1f4ca','1f4cb','1f4d6','1f4dd','1f4e4','1f4e5','1f4e9','1f4ee','1f501','1f504','1f50b','1f50d','1f50e','1f514','1f524','1f525','1f52e','1f534','1f538','1f53d','1f5a8','1f5c2','1f5d3','1f60c','1f629','1f634','1f636','1f638','1f63b','1f63d','1f63f','1f640','1f642','1f6cf','1f6e1','1f7e0','1f7e1','1f7e2','1f916','1f937','1f975','1f9a5','1f9e0','1f9e9','1f9ed','1fa77','1faab','2600','2601','2611','2614','2699','26a0','26a1','26c5','26c8','2705','270f','2728','2744','1f198','23fa','1f63c']);
+// 通常のHTML文中に絵文字を埋め込む版。innerHTMLに生の絵文字文字を入れると、あとから
+// unifyEmojiRendering()のMutationObserverが画像に置き換えるまでの一瞬（最大200ms）だけ
+// OS標準の絵文字が見えてしまい、特に警報アイコンのようにまとまった数を一度に表示する箇所では
+// 「チカチカ」して見える（実際にスマホで確認された）。最初から画像タグとして埋め込むことで防ぐ
+function htmlEmojiImg(unicode, altChar) {
+  if (!USE_FLUENT_EMOJI) return altChar;
+  const dir = FLUENT_EMOJI_CODES.has(unicode) ? 'fluent' : '72x72';
+  return `<img class="twemoji-icon" src="assets/emoji/${dir}/${unicode}.png" alt="${altChar}">`;
+}
 
 // ---------- ヘッダー実高さ →  --header-h（sticky toolbarの位置合わせ用） ----------
 function setHeaderHeightVar() {
@@ -1271,7 +1283,7 @@ async function runNationwideAlertCheck(force) {
       resultEl.textContent = `✅ 現在、警報級以上の発表がある地方はありません（${stamp}）`;
       return;
     }
-    const icon = lv => lv >= 4 ? '🔴' : lv >= 3 ? '🟠' : '⚠️';
+    const icon = lv => lv >= 4 ? htmlEmojiImg('1f534', '🔴') : lv >= 3 ? htmlEmojiImg('1f7e0', '🟠') : htmlEmojiImg('26a0', '⚠️');
     const lines = data.notable.map(r => {
       const top = r.top[0];
       const rainbandNote = r.linearRainbandLikely ? '　線状降水帯が関係している可能性' : '';
@@ -1400,7 +1412,7 @@ async function runWeatherAlertCheck() {
       }
       // rain/storm以外（雷・強風・波浪・濃霧・大雪・土砂災害…）も、発表中のものはすべて列挙する
       if (official.otherActive && official.otherActive.length) {
-        const icon = i => i.level >= 4 ? '🔴' : i.level >= 3 ? '🟠' : i.level >= 2 ? '⚠️' : '🔸';
+        const icon = i => i.level >= 4 ? htmlEmojiImg('1f534', '🔴') : i.level >= 3 ? htmlEmojiImg('1f7e0', '🟠') : i.level >= 2 ? htmlEmojiImg('26a0', '⚠️') : htmlEmojiImg('1f538', '🔸');
         lines.push(official.otherActive.map(i => `${icon(i)}【気象庁発表】${escapeHtml(i.label)}`).join('　'));
       }
       if (official.rainLevel === 0 && official.stormLevel === 0 && !official.otherActive.length && !official.linearRainbandLikely) {
@@ -9459,9 +9471,6 @@ renderHistoryQuestionnaire();
 (function unifyEmojiRendering() {
   if (typeof window.twemoji === 'undefined') return;
   if (!USE_FLUENT_EMOJI) return; // パソコンは何もしない
-  // Microsoft Fluent Emoji(3D)を自前ホストして使用。用意していない絵文字だけ
-  // 自前ホストのTwemoji(72x72)に自動フォールバックする。
-  const FLUENT_CODES = new Set(['1f300','1f305','1f30a','1f30f','1f319','1f321','1f324','1f326','1f327','1f328','1f32b','1f32c','1f331','1f337','1f338','1f33c','1f33f','1f345','1f35a','1f380','1f389','1f399','1f3af','1f3c3','1f3c6','1f3e0','1f3e5','1f3eb','1f431','1f43e','1f451','1f48c','1f496','1f497','1f49d','1f4a6','1f4a7','1f4a8','1f4ac','1f4ad','1f4bc','1f4be','1f4c5','1f4c8','1f4c9','1f4ca','1f4cb','1f4d6','1f4dd','1f4e4','1f4e5','1f4e9','1f4ee','1f501','1f504','1f50b','1f50d','1f50e','1f514','1f524','1f525','1f52e','1f534','1f538','1f53d','1f5a8','1f5c2','1f5d3','1f60c','1f629','1f634','1f636','1f638','1f63b','1f63d','1f63f','1f640','1f642','1f6cf','1f6e1','1f7e0','1f7e1','1f7e2','1f916','1f937','1f975','1f9a5','1f9e0','1f9e9','1f9ed','1fa77','1faab','2600','2601','2611','2614','2699','26a0','26a1','26c5','26c8','2705','270f','2728','2744','1f198','23fa','1f63c']);
   let pending = null;
   function parseNow() {
     pending = null;
@@ -9469,7 +9478,7 @@ renderHistoryQuestionnaire();
       window.twemoji.parse(document.body, {
         className: 'twemoji-icon',
         callback: function (icon, options) {
-          if (FLUENT_CODES.has(icon)) return 'assets/emoji/fluent/' + icon + '.png';
+          if (FLUENT_EMOJI_CODES.has(icon)) return 'assets/emoji/fluent/' + icon + '.png';
           return 'assets/emoji/72x72/' + icon + '.png';
         }
       });
