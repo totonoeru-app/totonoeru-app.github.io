@@ -2138,7 +2138,7 @@ function buildMoodTrendSVG(recordsAll, overlays) {
   return buildTrendSVG(recordsAll, {
     accessor: r => r.mood || null,
     range: [1, 3],
-    colorFor: v => v >= 2.5 ? 'var(--accent)' : v >= 1.5 ? 'var(--warm)' : '#ffa094',
+    colorFor: v => v >= 2.5 ? 'var(--accent)' : v >= 1.5 ? 'var(--warm)' : '#ff8fa3',
     label: '気分',
     overlays,
   });
