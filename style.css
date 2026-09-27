@@ -820,14 +820,16 @@ textarea::placeholder { color: var(--ink-sub); }
 .wx-headline b { font-size: 15px; line-height: 1.5; }
 .wx-now-sticky {
   position: sticky; top: var(--header-h, 96px); z-index: 9;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 10px 16px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: nowrap;
+  padding: 6px 16px;
   background: #2d3038; color: #fff;
+  overflow-x: auto; scrollbar-width: none;
 }
-.wx-now-icon { font-size: 26px; line-height: 1; }
-.wx-now-temp { font-size: 22px; font-weight: 700; }
-.wx-now-feels { font-size: 13px; color: #cfd3da; }
-.wx-now-item { font-size: 13px; color: #cfd3da; }
+.wx-now-sticky::-webkit-scrollbar { display: none; }
+.wx-now-icon { font-size: 20px; line-height: 1; flex-shrink: 0; }
+.wx-now-temp { font-size: 18px; font-weight: 700; flex-shrink: 0; }
+.wx-now-feels { font-size: 12px; color: #cfd3da; flex-shrink: 0; }
+.wx-now-item { font-size: 12px; color: #cfd3da; flex-shrink: 0; }
 .wx-refresh {
   margin-left: auto; background: none; border: none; color: #fff;
   font-size: 16px; cursor: pointer; padding: 4px 6px; opacity: .85;

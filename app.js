@@ -4364,7 +4364,6 @@ async function renderWeatherTab() {
       <div class="card scrub-wrap wx-chart-card" style="padding:10px 0; margin:6px 16px 0;">
         <div class="scrub-scroll" id="weatherChartScrub">${chart.html}</div>
         <div class="scrub-center-line"></div>
-        <div class="wx-tooltip-float" id="weatherChartTooltip"></div>
       </div>
       <div class="hbar-track" id="weatherChartHbar" style="margin:4px 16px 0;"></div>
       <div style="padding:14px 16px 0;" id="weatherHourlySection">
@@ -4380,7 +4379,6 @@ async function renderWeatherTab() {
     attachHScrollbar(document.getElementById('weatherChartScrub'), document.getElementById('weatherChartHbar'));
     // ドラッグ/スクロールバー操作（setupScrubbableChart）と、マウスを乗せただけのホバーの
     // 両方から同じ内容を更新できるよう、表示ロジックを1つの関数にまとめる
-    let weatherTooltipHideTimer = null;
     function updateWeatherReadout(idx) {
       const t = hourly.times[idx];
       const hour = Number(t.slice(11, 13));
@@ -4393,25 +4391,6 @@ async function renderWeatherTab() {
       `;
       const readout = document.getElementById('weatherHourlyReadout');
       if (readout) readout.innerHTML = `<span class="time">${timeLabel}</span>${fieldsHtml}`;
-
-      // チャートの上に浮かせて表示するツールチップ：横スクロール位置(scrollLeft)を差し引いた
-      // 「今見えている範囲の中でのx座標」に配置することで、ドラッグ・ホバーどちらでも
-      // カーソル/クロスヘアのすぐ近くに表示され続ける
-      const tooltipFloat = document.getElementById('weatherChartTooltip');
-      const scrollEl = document.getElementById('weatherChartScrub');
-      if (tooltipFloat && scrollEl && chart.xPositions[idx] != null) {
-        tooltipFloat.innerHTML = `<span class="time">${timeLabel}</span>${fieldsHtml}`;
-        tooltipFloat.classList.add('show');
-        const cardWidth = scrollEl.clientWidth;
-        const tw = tooltipFloat.offsetWidth || 140;
-        let left = chart.xPositions[idx] - scrollEl.scrollLeft - tw / 2;
-        left = Math.max(6, Math.min(cardWidth - tw - 6, left));
-        tooltipFloat.style.left = left + 'px';
-        // 追従はそのままに、最後の更新からしばらく操作がなければ自動で消す
-        // （出しっぱなしだと邪魔、というフィードバックを受けて）
-        clearTimeout(weatherTooltipHideTimer);
-        weatherTooltipHideTimer = setTimeout(() => tooltipFloat.classList.remove('show'), 1800);
-      }
 
       const crosshair = document.querySelector('#weatherChartScrub .hover-crosshair');
       if (crosshair && chart.xPositions[idx] != null) {
@@ -4431,13 +4410,6 @@ async function renderWeatherTab() {
         let best = 0, bestDist = Infinity;
         chart.xPositions.forEach((x, i) => { const d = Math.abs(x - mouseX); if (d < bestDist) { bestDist = d; best = i; } });
         updateWeatherReadout(best);
-      });
-      // カーソルがチャートの外に出たら、タイムアウトを待たずすぐにツールチップを消す
-      weatherChartScrubEl.addEventListener('pointerleave', (e) => {
-        if (e.pointerType === 'touch') return; // タッチはドラッグ終了時にendDrag側で処理される
-        clearTimeout(weatherTooltipHideTimer);
-        const tooltipFloat = document.getElementById('weatherChartTooltip');
-        if (tooltipFloat) tooltipFloat.classList.remove('show');
       });
     }
     // 週間の見通しの日付をタップしたら、時間ごとの予報グラフをその日の0時まで動かす
